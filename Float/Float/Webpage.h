@@ -1,0 +1,340 @@
+#pragma once
+
+// Edite webpage.html localmente, depois copie o conteúdo para dentro do R"rawliteral(...)" abaixo.
+
+const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #2c1654;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+      font-family: Arial, sans-serif;
+    }
+
+    .controller-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+    }
+
+    .controller {
+      /* Tamanho base do controle */
+      width: 360px;
+      height: 160px;
+      transform-origin: center;
+      /* A escala será aplicada via JavaScript */
+      background: linear-gradient(180deg, #e8e8e8 0%, #c8c8c8 100%);
+      border-radius: 12px 12px 28px 28px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.8);
+      padding: 20px 24px;
+      /* O conteúdo interno permanece como estava, em px */
+      position: relative;
+    }
+
+    .controller-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 100%;
+    }
+
+    /* ---- D-pad ---- */
+    .dpad {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      flex-shrink: 0;
+    }
+
+    .dpad-arm {
+      position: absolute;
+      background: #222;
+      border-radius: 2px;
+      transition: transform 0.05s ease, filter 0.05s ease;
+    }
+
+    .dpad-arm-up {
+      top: 0;
+      left: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .dpad-arm-down {
+      bottom: 0;
+      left: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .dpad-arm-left {
+      top: 32px;
+      left: 0;
+      width: 32px;
+      height: 32px;
+    }
+
+    .dpad-arm-right {
+      top: 32px;
+      right: 0;
+      width: 32px;
+      height: 32px;
+    }
+
+    .dpad-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 32px;
+      height: 32px;
+      background: #222;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .dpad:has(.dpad-up:active)    .dpad-arm-up    { transform: translateY(2px);  filter: brightness(1.5); }
+    .dpad:has(.dpad-down:active)  .dpad-arm-down  { transform: translateY(-2px); filter: brightness(1.5); }
+    .dpad:has(.dpad-left:active)  .dpad-arm-left  { transform: translateX(2px);  filter: brightness(1.5); }
+    .dpad:has(.dpad-right:active) .dpad-arm-right { transform: translateX(-2px); filter: brightness(1.5); }
+
+    .dpad-btn {
+      position: absolute;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      touch-action: none;
+      z-index: 1;
+    }
+
+    .dpad-up    { top: 0;    left: 32px; width: 32px; height: 32px; }
+    .dpad-down  { bottom: 0; left: 32px; width: 32px; height: 32px; }
+    .dpad-left  { top: 32px; left: 0;    width: 32px; height: 32px; }
+    .dpad-right { top: 32px; right: 0; width: 32px; height: 32px; }
+
+    /* ---- Start / Select ---- */
+    .center-buttons {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pill-btn {
+      width: 48px;
+      height: 14px;
+      background: #555;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      touch-action: none;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    .pill-btn:active { background: #777; }
+
+    .pill-label {
+      font-size: 9px;
+      color: #666;
+      letter-spacing: 0.05em;
+      margin-top: 2px;
+    }
+
+    /* ---- Face buttons (SNES diamond) ---- */
+    .face-buttons {
+      position: relative;
+      width: 108px;
+      height: 124px;
+      flex-shrink: 0;
+    }
+
+    .face-group {
+      position: absolute;
+    }
+
+    .face-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      touch-action: none;
+      font-size: 14px;
+      font-weight: bold;
+      color: #fff;
+      transition: transform 0.05s ease, box-shadow 0.05s ease, filter 0.05s ease;
+    }
+
+    .face-btn:active {
+      transform: translateY(2px);
+      filter: brightness(1.15);
+    }
+
+    .face-y { top: 0;  left: 50px; }
+    .face-x { top: 34px; left: 0; }
+    .face-a { top: 50px; right: 0; }
+    .face-b { bottom: 0; left: 15px; }
+
+    .btn-y {
+      background: #7d3c98;
+      box-shadow: 0 3px 0 #4a235a, 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .btn-x {
+      background: #2471a3;
+      box-shadow: 0 3px 0 #1a5276, 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .btn-a {
+      background: #e74c3c;
+      box-shadow: 0 3px 0 #8b0000, 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .btn-b {
+      background: #f1c40f;
+      color: #333;
+      box-shadow: 0 3px 0 #b7950b, 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn-y:active { box-shadow: 0 1px 0 #4a235a, 0 2px 4px rgba(0, 0, 0, 0.3); }
+    .btn-x:active { box-shadow: 0 1px 0 #1a5276, 0 2px 4px rgba(0, 0, 0, 0.3); }
+    .btn-a:active { box-shadow: 0 1px 0 #8b0000, 0 2px 4px rgba(0, 0, 0, 0.3); }
+    .btn-b:active { box-shadow: 0 1px 0 #b7950b, 0 2px 4px rgba(0, 0, 0, 0.3); }
+	
+	.mensagem-text {
+	  font-size: 12px;
+      padding: 0 0 10px 10px;
+      margin-top: 5px;
+    }
+	
+  </style>
+  <script>
+    const socket = new WebSocket("ws://" + location.hostname + ":81/");
+  
+    function resizeController() {
+      const controller = document.querySelector('.controller');
+      const wrapper = document.querySelector('.controller-wrapper');
+      const rect = wrapper.getBoundingClientRect();
+      const availWidth = rect.width;
+      const availHeight = rect.height;
+      // Tamanho base do controle
+      const baseWidth = 360;
+      const baseHeight = 160;
+      // Escala máxima para caber na largura e altura
+      const scaleX = availWidth / baseWidth;
+      const scaleY = availHeight / baseHeight;
+      const scale = Math.min(scaleX, scaleY);
+      controller.style.transform = 'scale(' + scale + ')';
+    }
+	
+	socket.onmessage = function(event) {
+	  document.getElementById("mensagem").textContent = event.data;
+	};
+	
+	function sendCommand(command) {
+	  if (socket.readyState !== WebSocket.OPEN) {
+		console.error("WebSocket não conectado");
+		return;
+	  }
+
+	  socket.send(JSON.stringify(command));
+	}
+
+    function bindButton(el, name) {
+      const press   = () => sendCommand({ name, action: "press" });
+	  const release = () => sendCommand({ name, action: "release" });
+
+      el.addEventListener("mousedown", press);
+      el.addEventListener("mouseup", release);
+      el.addEventListener("mouseleave", release);
+
+      el.addEventListener("touchstart", e => { e.preventDefault(); press(); });
+      el.addEventListener("touchend",   e => { e.preventDefault(); release(); });
+      el.addEventListener("touchcancel", e => { e.preventDefault(); release(); });
+    }
+
+    window.onload = function() {
+      // Bind dos botões
+      bindButton(document.getElementById("upBtn"),     "up");
+      bindButton(document.getElementById("downBtn"),   "down");
+      bindButton(document.getElementById("leftBtn"),   "left");
+      bindButton(document.getElementById("rightBtn"),  "right");
+      bindButton(document.getElementById("aBtn"),      "a");
+      bindButton(document.getElementById("bBtn"),      "b");
+      bindButton(document.getElementById("xBtn"),      "x");
+      bindButton(document.getElementById("yBtn"),      "y");
+      bindButton(document.getElementById("startBtn"),  "start");
+      bindButton(document.getElementById("selectBtn"), "select");
+
+      resizeController();
+      // Atualizar em caso de redimensionamento da janela
+      window.addEventListener('resize', resizeController);
+    };
+  </script>
+</head>
+<body>
+  <div class="controller-wrapper">
+    <div class="controller">
+      <div class="controller-inner">
+
+        <!-- D-pad -->
+        <div class="dpad">
+          <div class="dpad-arm dpad-arm-up"></div>
+          <div class="dpad-arm dpad-arm-down"></div>
+          <div class="dpad-arm dpad-arm-left"></div>
+          <div class="dpad-arm dpad-arm-right"></div>
+          <div class="dpad-center"></div>
+          <button id="upBtn"    class="dpad-btn dpad-up"    aria-label="Up"></button>
+          <button id="downBtn"  class="dpad-btn dpad-down"  aria-label="Down"></button>
+          <button id="leftBtn"  class="dpad-btn dpad-left"  aria-label="Left"></button>
+          <button id="rightBtn" class="dpad-btn dpad-right" aria-label="Right"></button>
+        </div>
+
+        <!-- Start / Select -->
+        <div class="center-buttons">
+          <div>
+            <button id="selectBtn" class="pill-btn" aria-label="Select"></button>
+            <div class="pill-label">SELECT</div>
+          </div>
+          <div>
+            <button id="startBtn" class="pill-btn" aria-label="Start"></button>
+            <div class="pill-label">START</div>
+          </div>
+        </div>
+
+        <!-- X / Y / A / B -->
+        <div class="face-buttons">
+          <div class="face-group face-y">
+            <button id="yBtn" class="face-btn btn-y" aria-label="Y">Y</button>
+          </div>
+          <div class="face-group face-x">
+            <button id="xBtn" class="face-btn btn-x" aria-label="X">X</button>
+          </div>
+          <div class="face-group face-a">
+            <button id="aBtn" class="face-btn btn-a" aria-label="A">A</button>
+          </div>
+          <div class="face-group face-b">
+            <button id="bBtn" class="face-btn btn-b" aria-label="B">B</button>
+          </div>
+        </div>
+
+      </div>
+	  
+	  <div id="mensagem" class="mensagem-text">Aguardando mensagem...</div>
+	</div>
+  </div>
+</body>
+</html>
+)rawliteral";

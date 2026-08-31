@@ -1,0 +1,32 @@
+//esp 32s3---------------------------------
+48 = led rgb
+neopixelWrite(48, 50, 0, 0);
+
+//esp 32s3 cam-----------------------------
+https://docs.keyestudio.com/projects/MB0184/en/latest/docs/MB0184%20ESP32-S3%20CAM%20Development%20Board.html
+
+const int PINO_1  = 1;
+const int PINO_2  = 2; // Led Interno da placa
+const int PINO_3  = 3;
+const int PINO_21 = 21;
+const int PINO_38 = 38;
+const int PINO_39 = 39;
+const int PINO_40 = 40;
+const int PINO_41 = 41;
+const int PINO_42 = 42;
+const int PINO_45 = 45; // Cuidado no boot
+const int PINO_47 = 47;
+const int PINO_48 = 48; 
+
+CAMERA_MODEL_ESP32S3_EYE
+
+python -m esptool --port COM4 --chip esp32s3 --baud 9600 erase_flash
+python -m esptool --port COM4 --chip esp32s3 --baud 921600 --before default_reset --after hard_reset write_flash 0x0000 CameraWebServer.ino.merged.bin
+
+Camera problema de aquecimento
+https://www.reddit.com/r/esp32/comments/1ou74mm/on_the_overheating_issues_of_the_ov3660_and/
+
+//--------------------------------
+
+err: "A fatal error occurred: Failed to connect to ESP32-S3: No serial data received."
+I have run into this multiple times. It usually occurs when I wrote code that is causing some stack error or writing excessively to serial. The solution that works for me is to unplug the ESP, hold down the BOOT button (not reset, don't touch reset), plug the ESP back in WHILE HOLDING DOWN THE BOOT BUTTON, keep holding the button down until it says it found the serial port and starts uploading. It should be safe to take your finger off the button.
