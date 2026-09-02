@@ -2,69 +2,59 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+#include <ETH.h>
+#include <WiFiUdp.h>
 #include "esp_camera.h"
 #include "sensor.h"
 //#include "MyWebServer.h" //TODO: change to eternet later
-
 #include "BoardConfig.h"
 
-void w5500Reset() {
-  digitalWrite(W5500_RST, LOW);
-  delay(100);
-  digitalWrite(W5500_RST, HIGH);
-  delay(200);
+IPAddress local_IP(192, 168, 10, 2);
+IPAddress gateway(192, 168, 10, 1);
+IPAddress subnet(255, 255, 255, 0);
+
+IPAddress remote_IP(192, 168, 10, 1);
+WiFiUDP udp;
+const uint16_t UDP_PORT = 5000;
+
+void onEvent(arduino_event_id_t event) {
+  Serial.print("Evento Ethernet: ");
+  Serial.println(event);
 }
-
-uint8_t w5500Read(uint16_t address, uint8_t block) {
-  uint8_t data;
-
-  digitalWrite(W5500_CS, LOW);
-
-  SPI.transfer(address >> 8);
-  SPI.transfer(address & 0xFF);
-
-  // Read + VDM + bloco
-  SPI.transfer((block << 3) | 0x00);
-
-  data = SPI.transfer(0x00);
-
-  digitalWrite(W5500_CS, HIGH);
-
-  return data;
-}
-
 void setup() {
-  // turn camera off and not allow wificonnection
+  Network.onEvent(onEvent);
+
+  // turn camera off
   pinMode(PWDN_GPIO_NUM, OUTPUT);
   digitalWrite(PWDN_GPIO_NUM, HIGH);
   delay(1000);
 
+  //serial
+  Serial.println("=== START SERIAL === ");
   Serial.begin(115200);
-
-  Serial.println("\n--- START SERIAL ---");
-  
   Serial.setDebugOutput(true);
-
   esp_reset_reason_t reason = esp_reset_reason();
-
   Serial.printf("Reset reason = %d\n", reason);
 
-  Serial.println("\n--- HARDWARE CHECK ESP32-S3 CAM ---");
+  //Check esp32-s3 cam
+  Serial.println("=== HARDWARE CHECK ESP32-S3 CAM ===");
   
   uint32_t flashSize = ESP.getFlashChipSize();
   Serial.printf("Tamanho da Flash: %d MB (%d Bytes)\n", flashSize / (1024 * 1024), flashSize);
   
   if (psramInit()) {
-    Serial.println("PSRAM Inicializada com sucesso!");
+    Serial.println("=== PSRAM initialized ===");
     uint32_t psramSize = ESP.getPsramSize();
     uint32_t freePsram = ESP.getFreePsram();
     Serial.printf("Tamanho Total da PSRAM: %d MB (%d Bytes)\n", psramSize / (1024 * 1024), psramSize);
     Serial.printf("PSRAM Livre: %d Bytes\n", freePsram);
   } else {
-    Serial.println("ERRO: PSRAM não foi detectada ou está desativada nas configurações!");
+    Serial.println("ERR: PSRAM fail or desactivated");
   }
 
-  Serial.println("\n--- INIT ---");
+  //initializing camera
+  Serial.println("=== Camera initializing... ===");
+
   digitalWrite(PWDN_GPIO_NUM, LOW);
   delay(1000);
 
@@ -73,59 +63,34 @@ void setup() {
 
   //delay(3000);
 
-  Serial.println("\n--- CAMERA INIT... ---");
-
   camera_config_t config = CameraConfig();
   esp_err_t err = esp_camera_init(&config);
 
   if (err != ESP_OK) {
 
-    Serial.printf("Falha ao inicializar camera: 0x%x\n", err);
+    Serial.printf("Fail on camera initilizing: 0x%x\n", err);
 
     return;
-
   }
 
-  Serial.println("Camera OK!");
+  Serial.println("Camera initialized!");
   delay(1000);
   
   sensor_t * s = esp_camera_sensor_get();
   if (s != NULL) {
-    Serial.printf("🔍 ID da Câmera Detectado - PID: 0x%02X, VER: 0x%02X\n", s->id.PID, s->id.VER);
+    Serial.printf("Detected camera - PID: 0x%02X, VER: 0x%02X\n", s->id.PID, s->id.VER);
   } else {
-    Serial.println("❌ Não foi possível ler as informações de ID do sensor.");
+    Serial.println("Camera detection fail");
   }
+  
+  Serial.println("=== Camera initialized ===");
 
   delay(1000);
-  Serial.println();
-  Serial.println("=== TESTE GPIO + SPI ESP32-S3-CAM ===");
 
-  pinMode(W5500_CS, OUTPUT);
-  digitalWrite(W5500_CS, HIGH);
-
-  pinMode(W5500_RST, OUTPUT);
-  digitalWrite(W5500_RST, HIGH);
-
-  Serial.println("GPIO CS configurado.");
-  Serial.println("GPIO RST configurado.");
-
-  SPI.begin(W5500_SCLK, W5500_MISO, W5500_MOSI, W5500_CS);
-
-  w5500Reset();
-
-  uint8_t mr = w5500Read(0x0000, 0x00);
-
-  Serial.print("MR = 0x");
-  if (mr < 0x10) Serial.print("0");
-  Serial.println(mr, HEX);
-
-  // PHYCFGR
-  uint8_t phy = w5500Read(0x002E, 0x00);
-
-  Serial.print("PHYCFGR = 0x");
-  if (phy < 0x10) Serial.print("0");
-  Serial.println(phy, HEX);
-  Serial.println("SPI inicializado.");
+  //UDP connection
+  Serial.println("=== UDP connection initializing... ===");
+  //udp code in here
+  Serial.println("=== UDP initialized ===");
 }
 
 void loop() {
@@ -144,6 +109,7 @@ void loop() {
       );
   }
 
+  //TODO: remove later
   // Listen for incoming requests
   //server.handleClient();  
 
@@ -152,6 +118,7 @@ void loop() {
   if (fb) {
     size_t tamanho = fb->len;
 
+    //TODO send by UDP later
     //WebSocketBroadcastStream(fb->buf, tamanho);
     //webSocket.loop();
 

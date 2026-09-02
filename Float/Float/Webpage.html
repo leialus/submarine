@@ -3,7 +3,7 @@
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
     html, body {
       margin: 0;
@@ -11,7 +11,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #2c1654;
+      background: #353131; /* Fundo cinza caso o vídeo falhe */
       display: flex;
       align-items: center;
       justify-content: center;
@@ -19,25 +19,44 @@
       font-family: Arial, sans-serif;
     }
 
+    /* ---- Container do Vídeo (Fundo em Tela Cheia) ---- */
+    .video-container {
+       position: absolute;
+	   top: 50%;
+	   left: 50%;
+	   width: 420px;
+	   height: 420px;
+	   transform: translate(-50%, -50%);
+	   z-index: 1;
+    }
+
+    /* O elemento de imagem agora preenche toda a tela sem distorcer */
+    .stream {
+      width: 100%;
+      height: 100%;
+      object-fit: cover; 
+      border: none !important;
+      border-radius: 0 !important;
+    }
+
+    /* ---- Wrapper do Controle ---- */
     .controller-wrapper {
       display: flex;
-      align-items: center;
+      align-items: flex-end;
       justify-content: center;
       width: 100%;
       height: 100%;
+      position: relative;
+      z-index: 2; /* Força o controle a ficar na frente do vídeo */
+      pointer-events: none; /* Permite toques no fundo se necessário */
     }
 
+    /* ---- O Controle Transparente ---- */
     .controller {
-      /* Tamanho base do controle */
-      width: 360px;
-      height: 160px;
+      width: 100%;
       transform-origin: center;
-      /* A escala será aplicada via JavaScript */
-      background: linear-gradient(180deg, #e8e8e8 0%, #c8c8c8 100%);
-      border-radius: 12px 12px 28px 28px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.8);
+      pointer-events: auto; /* Devolve os cliques apenas para o controle */
       padding: 20px 24px;
-      /* O conteúdo interno permanece como estava, em px */
       position: relative;
     }
 
@@ -48,7 +67,7 @@
       height: 100%;
     }
 
-    /* ---- D-pad ---- */
+    /* ---- D-pad (Levemente mais visível no fundo claro/escuro) ---- */
     .dpad {
       position: relative;
       width: 96px;
@@ -58,39 +77,24 @@
 
     .dpad-arm {
       position: absolute;
-      background: #222;
+      background: rgba(17, 17, 17, 0.85); /* Preto levemente transparente */
       border-radius: 2px;
       transition: transform 0.05s ease, filter 0.05s ease;
     }
 
-    .dpad-arm-up {
-      top: 0;
-      left: 32px;
-      width: 32px;
-      height: 32px;
-    }
+    .dpad-arm-up    { top: 0; left: 32px; width: 32px; height: 32px; }
+    .dpad-arm-down  { bottom: 0; left: 32px; width: 32px; height: 32px; }
+    .dpad-arm-left  { top: 32px; left: 0; width: 32px; height: 32px; }
+    .dpad-arm-right { top: 32px; right: 0; width: 32px; height: 32px; }
 
-    .dpad-arm-down {
-      bottom: 0;
-      left: 32px;
-      width: 32px;
-      height: 32px;
-    }
-
-    .dpad-arm-left {
-      top: 32px;
-      left: 0;
-      width: 32px;
-      height: 32px;
-    }
-
-    .dpad-arm-right {
-      top: 32px;
-      right: 0;
-      width: 32px;
-      height: 32px;
-    }
-
+	.left-btns {
+	  justify-content: flex-start;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 30px;
+	}
+	
     .dpad-center {
       position: absolute;
       top: 50%;
@@ -98,7 +102,7 @@
       transform: translate(-50%, -50%);
       width: 32px;
       height: 32px;
-      background: #222;
+      background: rgba(17, 17, 17, 0.85);
       z-index: 0;
       pointer-events: none;
     }
@@ -127,13 +131,14 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+	  text-align: center;
       gap: 10px;
     }
 
     .pill-btn {
       width: 48px;
       height: 14px;
-      background: #555;
+      background: rgba(50, 50, 50, 0.8);
       border: none;
       border-radius: 7px;
       cursor: pointer;
@@ -145,12 +150,13 @@
 
     .pill-label {
       font-size: 9px;
-      color: #666;
+      color: #fff; /* Mudado para branco para destacar melhor sobre o vídeo */
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
       letter-spacing: 0.05em;
       margin-top: 2px;
     }
 
-    /* ---- Face buttons (SNES diamond) ---- */
+    /* ---- Face buttons (Opacidade nos botões coloridos) ---- */
     .face-buttons {
       position: relative;
       width: 108px;
@@ -185,20 +191,21 @@
     .face-a { top: 50px; right: 0; }
     .face-b { bottom: 0; left: 15px; }
 
+    /* Cores originais preservadas com 65% de opacidade */
     .btn-y {
-      background: #7d3c98;
+      background: rgba(125, 60, 152, 0.65);
       box-shadow: 0 3px 0 #4a235a, 0 4px 8px rgba(0, 0, 0, 0.3);
     }
     .btn-x {
-      background: #2471a3;
+      background: rgba(36, 113, 163, 0.65);
       box-shadow: 0 3px 0 #1a5276, 0 4px 8px rgba(0, 0, 0, 0.3);
     }
     .btn-a {
-      background: #e74c3c;
-      box-shadow: 0 3px 0 #8b0000, 0 4px 8px rgba(0, 0, 0, 0.3);
+      background: rgba(231, 76, 60, 0.65);
+      box-shadow: 0 3px 0 #8b00007d, 0 4px 8px rgba(0, 0, 0, 0.3);
     }
     .btn-b {
-      background: #f1c40f;
+      background: rgba(241, 196, 15, 0.65);
       color: #333;
       box-shadow: 0 3px 0 #b7950b, 0 4px 8px rgba(0, 0, 0, 0.3);
     }
@@ -208,12 +215,18 @@
     .btn-a:active { box-shadow: 0 1px 0 #8b0000, 0 2px 4px rgba(0, 0, 0, 0.3); }
     .btn-b:active { box-shadow: 0 1px 0 #b7950b, 0 2px 4px rgba(0, 0, 0, 0.3); }
 	
-	.mensagem-text {
-	  font-size: 12px;
-      padding: 0 0 10px 10px;
-      margin-top: 5px;
+    /* ---- Texto de Mensagem Flutuante ---- */
+    .mensagem-text {
+      position: absolute;
+      font-size: 11px;
+      color: #fff;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+	  width: 100%;
+	  padding: 2px;
+	  background: rgba(220, 220, 220, 0.4); 
+      backdrop-filter: blur(10px); 
+      -webkit-backdrop-filter: blur(10px);
     }
-	
   </style>
   <script>
     const socket = new WebSocket("ws://" + location.hostname + ":81/");
@@ -224,32 +237,29 @@
       const rect = wrapper.getBoundingClientRect();
       const availWidth = rect.width;
       const availHeight = rect.height;
-      // Tamanho base do controle
       const baseWidth = 360;
       const baseHeight = 160;
-      // Escala máxima para caber na largura e altura
       const scaleX = availWidth / baseWidth;
       const scaleY = availHeight / baseHeight;
       const scale = Math.min(scaleX, scaleY);
       controller.style.transform = 'scale(' + scale + ')';
     }
 	
-	socket.onmessage = function(event) {
-	  document.getElementById("mensagem").textContent = event.data;
-	};
+    socket.onmessage = function(event) {
+      document.getElementById("mensagem").textContent = event.data;
+    };
 	
-	function sendCommand(command) {
-	  if (socket.readyState !== WebSocket.OPEN) {
-		console.error("WebSocket não conectado");
-		return;
-	  }
-
-	  socket.send(JSON.stringify(command));
-	}
+    function sendCommand(command) {
+      if (socket.readyState !== WebSocket.OPEN) {
+        console.error("WebSocket não conectado");
+        return;
+      }
+      socket.send(JSON.stringify(command));
+    }
 
     function bindButton(el, name) {
       const press   = () => sendCommand({ name, action: "press" });
-	  const release = () => sendCommand({ name, action: "release" });
+      const release = () => sendCommand({ name, action: "release" });
 
       el.addEventListener("mousedown", press);
       el.addEventListener("mouseup", release);
@@ -274,41 +284,77 @@
       bindButton(document.getElementById("selectBtn"), "select");
 
       resizeController();
-      // Atualizar em caso de redimensionamento da janela
       window.addEventListener('resize', resizeController);
     };
+	
+    // ---- Video WebSocket (Port 82) ----
+    const streamSocket = new WebSocket("ws://" + location.hostname + ":82/");
+    streamSocket.binaryType = "blob";
+
+    let displaying = false;
+	
+    streamSocket.onmessage = async (event) => {
+      if (displaying) {
+        return;
+      }
+
+      const stream = document.getElementById("stream");
+      if (!stream) return; 
+
+      displaying = true;
+
+      const url = URL.createObjectURL(event.data);
+
+      stream.onload = () => {
+        URL.revokeObjectURL(url);
+        displaying = false;
+      };
+
+      stream.src = url;
+    };
+	
   </script>
 </head>
 <body>
+
+  <div class="video-container">
+	<img id="stream" class="stream" src="https://c4.wallpaperflare.com/wallpaper/605/299/689/cat-fish-mermaid-aquarium-wallpaper-preview.jpg" alt="Aguardando stream...">
+  </div>
+	
   <div class="controller-wrapper">
+  
+	<div id="mensagem" class="mensagem-text">Aguardando mensagem...</div>
+	
     <div class="controller">
       <div class="controller-inner">
 
-        <!-- D-pad -->
-        <div class="dpad">
-          <div class="dpad-arm dpad-arm-up"></div>
-          <div class="dpad-arm dpad-arm-down"></div>
-          <div class="dpad-arm dpad-arm-left"></div>
-          <div class="dpad-arm dpad-arm-right"></div>
-          <div class="dpad-center"></div>
-          <button id="upBtn"    class="dpad-btn dpad-up"    aria-label="Up"></button>
-          <button id="downBtn"  class="dpad-btn dpad-down"  aria-label="Down"></button>
-          <button id="leftBtn"  class="dpad-btn dpad-left"  aria-label="Left"></button>
-          <button id="rightBtn" class="dpad-btn dpad-right" aria-label="Right"></button>
-        </div>
+		<div class="left-btns">
 
-        <!-- Start / Select -->
-        <div class="center-buttons">
-          <div>
-            <button id="selectBtn" class="pill-btn" aria-label="Select"></button>
-            <div class="pill-label">SELECT</div>
-          </div>
-          <div>
-            <button id="startBtn" class="pill-btn" aria-label="Start"></button>
-            <div class="pill-label">START</div>
-          </div>
-        </div>
+			<!-- D-pad -->
+			<div class="dpad">
+			  <div class="dpad-arm dpad-arm-up"></div>
+			  <div class="dpad-arm dpad-arm-down"></div>
+			  <div class="dpad-arm dpad-arm-left"></div>
+			  <div class="dpad-arm dpad-arm-right"></div>
+			  <div class="dpad-center"></div>
+			  <button id="upBtn"    class="dpad-btn dpad-up"    aria-label="Up"></button>
+			  <button id="downBtn"  class="dpad-btn dpad-down"  aria-label="Down"></button>
+			  <button id="leftBtn"  class="dpad-btn dpad-left"  aria-label="Left"></button>
+			  <button id="rightBtn" class="dpad-btn dpad-right" aria-label="Right"></button>
+			</div>
 
+			<!-- Start / Select -->
+			<div class="center-buttons">
+			  <div>
+				<button id="selectBtn" class="pill-btn" aria-label="Select"></button>
+				<div class="pill-label">SELECT</div>
+			  </div>
+			  <div>
+				<button id="startBtn" class="pill-btn" aria-label="Start"></button>
+				<div class="pill-label">START</div>
+			  </div>
+			</div>
+		</div>
         <!-- X / Y / A / B -->
         <div class="face-buttons">
           <div class="face-group face-y">
@@ -327,7 +373,6 @@
 
       </div>
 	  
-	  <div id="mensagem" class="mensagem-text">Aguardando mensagem...</div>
 	</div>
   </div>
 </body>
