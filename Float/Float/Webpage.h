@@ -234,21 +234,9 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     }
   </style>
   <script>
-    const socket = new WebSocket("ws://" + location.hostname + ":81/");
-  
-    function resizeController() {
-      const controller = document.querySelector('.controller');
-      const wrapper = document.querySelector('.controller-wrapper');
-      const rect = wrapper.getBoundingClientRect();
-      const availWidth = rect.width;
-      const availHeight = rect.height;
-      const baseWidth = 360;
-      const baseHeight = 160;
-      const scaleX = availWidth / baseWidth;
-      const scaleY = availHeight / baseHeight;
-      const scale = Math.min(scaleX, scaleY);
-      controller.style.transform = 'scale(' + scale + ')';
-    }
+	const host = location.hostname || "localhost";
+	
+    const socket = new WebSocket("ws://" + host + ":81/");
 	
     socket.onmessage = function(event) {
       document.getElementById("mensagem").textContent = event.data;
@@ -288,12 +276,10 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       bindButton(document.getElementById("startBtn"),  "start");
       bindButton(document.getElementById("selectBtn"), "select");
 
-      resizeController();
-      window.addEventListener('resize', resizeController);
     };
 	
     // ---- Video WebSocket (Port 82) ----
-    const streamSocket = new WebSocket("ws://" + location.hostname + ":82/");
+    const streamSocket = new WebSocket("ws://" + host + ":82/");
     streamSocket.binaryType = "blob";
 
     let displaying = false;

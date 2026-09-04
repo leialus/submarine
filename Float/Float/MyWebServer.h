@@ -96,6 +96,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     return;
   }
 
+  Serial.println("fst");
   bool pressed = strcmp(action, "press") == 0;
 
   handleButton(String(name), pressed);
@@ -127,7 +128,7 @@ void WebServerInit() {
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
   webSocketStream.begin();
-  webSocket.onEvent(webSocketStreamEvent);
+  webSocketStream.onEvent(webSocketStreamEvent);
   Serial.println("=== WebSocket Server initialized!=== ");  
 }
 

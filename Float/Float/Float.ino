@@ -1,33 +1,17 @@
 /*
 pinos esp32s3
 */
-
-#include <SPI.h> 
-#include <ETH.h>
-#include <WiFiUdp.h>
-
-#include "BoardConfig.h"
 #include "MyWebServer.h"
-
-IPAddress local_IP(192, 168, 10, 1);
-IPAddress gateway(192, 168, 10, 2);
-IPAddress subnet(255, 255, 255, 0);
-
-IPAddress remote_IP(192, 168, 10, 2);
-
-WiFiUDP udp;
-const uint16_t UDP_PORT = 5000;
+#include "UDPConnection.h"
 
 void onEvent(arduino_event_id_t event) {
   Serial.print("Evento Ethernet: ");
   Serial.println(event);
 }
 
-
 void HanddlerCommands(int btn, int action){
   //TODO: send command to submarine using UDP
 }
-
 
 void WebsocketLog(const String& myMessage){
   String message = myMessage;
@@ -48,20 +32,52 @@ void setup() {
   Network.onEvent(onEvent);
   MyWebServerCallbacks(WebsocketLog, HanddlerCommands);
 
-  WebServerInit();
-  delay(1000);
+  //WebServerInit();
+  //delay(1000);
 
-  Serial.println();
-  Serial.println("===  W5500 initializing... ===");
-  Serial.println("TODO");
+  UDPInit();
+  delay(1000);
 }
 
 void loop() {
+  
+  static unsigned long lastCheck = 0;
+
+  if (millis() - lastCheck >= 2000)
+  {
+    Serial.println();
+    Serial.println("-------- FLOAT --------");
+
+    Serial.print("ETH started: ");
+    Serial.println(ETH.started() ? "SIM" : "NAO");
+
+    Serial.print("Link: ");
+    Serial.println(ETH.linkUp() ? "UP" : "DOWN");
+
+    Serial.print("IP: ");
+    Serial.println(ETH.localIP());
+
+    Serial.print("remote_IP: ");
+    Serial.println(remote_IP);
+
+    Serial.print("UDP_PORT: ");
+    Serial.println(UDP_PORT);
+
+    Serial.println("---------------------------");    
+
+    lastCheck = millis();
+  }
+
   server.handleClient();  // Listen for incoming requests
 
   // WebSocket
   webSocket.loop();
   webSocketStream.loop();
+
+  //UDP-----------------------------------------------------
+  UDPReceiver();
+  //UDPSender();
+  
   //TODO: create rj45 (UDP) connection
   //get frame or message
 

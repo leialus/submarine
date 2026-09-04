@@ -28,5 +28,11 @@ https://www.reddit.com/r/esp32/comments/1ou74mm/on_the_overheating_issues_of_the
 
 //--------------------------------
 
+w5500
+a conecção entre 2 25500 só funciona com cabo crossover
+https://www.usinainfo.com.br/ethernet-e-wifi-arduino/modulo-ethernet-w5500-5469.html?srsltid=AfmBOorA6n1Gp39W9dPealO3kebaXOZluGjJrzzs_xaA280H0Fm-ImnH
+
+
+Esp travado em loop e não entrando em boot
 err: "A fatal error occurred: Failed to connect to ESP32-S3: No serial data received."
 I have run into this multiple times. It usually occurs when I wrote code that is causing some stack error or writing excessively to serial. The solution that works for me is to unplug the ESP, hold down the BOOT button (not reset, don't touch reset), plug the ESP back in WHILE HOLDING DOWN THE BOOT BUTTON, keep holding the button down until it says it found the serial port and starts uploading. It should be safe to take your finger off the button.
