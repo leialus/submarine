@@ -31,7 +31,7 @@
 #define W5500_RST  48
 
 //Config functions ----------------------------------
-
+/*
 camera_config_t CameraConfig(){
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -61,5 +61,5 @@ camera_config_t CameraConfig(){
   config.fb_count = 1;
   return config;
 }
-
+*/
 #endif

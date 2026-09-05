@@ -11,16 +11,21 @@
 #define W5500_INT  13
 
 // Endereço MAC do Servidor (DEVE ser único)
-byte macServer[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x01 };
+byte myMacAddress[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x01 };
 
 // Configuração de IP Estático (Servidor)
-IPAddress ipServer(192, 168, 1, 10);
+IPAddress localIP(192, 168, 1, 10);
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 255, 0);
 
+// IP e porta do servidor
+IPAddress clientIp(192, 168, 1, 20);
+unsigned int UDPPort = 8888;
+
 W5500Driver driver(W5500_CS);
 EthernetUDP Udp;
-unsigned int localPort = 8888;  // Porta para escutar
+
+unsigned long lastPingTime = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -42,7 +47,7 @@ void setup() {
   Ethernet.init(driver);
   
   // Inicia a Ethernet com IP estático
-  Ethernet.begin(macServer, ipServer, gateway, subnet);
+  Ethernet.begin(myMacAddress, localIP, gateway, subnet);
 
   // Verifica se o hardware foi encontrado
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
@@ -58,9 +63,9 @@ void setup() {
   }
 
     // Inicia o serviço UDP
-  if (Udp.begin(localPort)) {
+  if (Udp.begin(UDPPort)) {
     Serial.print("Servidor UDP iniciado na porta ");
-    Serial.println(localPort);
+    Serial.println(UDPPort);
     Serial.print("IP: ");
     Serial.println(Ethernet.localIP());
   } else {
@@ -70,26 +75,39 @@ void setup() {
 }
 
 void loop() {
-  // Verifica se chegou um pacote UDP
+   // --- 1. Processa pacotes recebidos ---
   int packetSize = Udp.parsePacket();
   if (packetSize) {
-    Serial.print("Recebido pacote de ");
-    Serial.print(Udp.remoteIP());
-    Serial.print(":");
-    Serial.println(Udp.remotePort());
-
-    // Lê o pacote para um buffer
+    // Lê a mensagem
     char buffer[255];
     int len = Udp.read(buffer, 255);
     if (len > 0) {
-      buffer[len] = 0; // finaliza a string
-      Serial.print("Conteúdo: ");
+      buffer[len] = 0;
+      Serial.print("Recebido de ");
+      Serial.print(Udp.remoteIP());
+      Serial.print(":");
+      Serial.print(Udp.remotePort());
+      Serial.print(" -> ");
       Serial.println(buffer);
     }
 
-    // Envia uma resposta de volta para o remetente
-    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-    Udp.print("Mensagem recebida!");
+    // Responde imediatamente (como já fazia)
+    // Udp.beginPacket(clientIp, UDPPort);
+    // Udp.print("Mensagem recebida do submarine!");
+    // Udp.endPacket();
+    // Serial.println("Resposta enviada.");
+  }
+
+  // --- 2. Envia uma mensagem ativa para o cliente a cada 5 segundos ---
+  if ( millis() - lastPingTime >= 5000) {
+    lastPingTime = millis();
+    
+    Udp.beginPacket(clientIp, UDPPort);
+    Udp.print("Ping do submarine!");
     Udp.endPacket();
+    Serial.print("Ping enviado para ");
+    Serial.print(clientIp);
+    Serial.print(":");
+    Serial.println(UDPPort);
   }
 }
