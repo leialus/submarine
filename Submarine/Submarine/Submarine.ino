@@ -16,13 +16,10 @@ IPAddress subnet(255, 255, 255, 0);
 
 // IP e porta do servidor
 IPAddress serverIp(192, 168, 1, 10);
-const int serverPort = 8080;
+const int localPort = 8888;
 
 W5500Driver driver(W5500_CS);
-
-// Cliente global para manter a conexão
-EthernetClient client;
-bool conectado = false;
+EthernetUDP Udp;
 
 void setup() {
   Serial.begin(115200);
@@ -60,69 +57,40 @@ void setup() {
   Serial.print("IP do Cliente: ");
   Serial.println(Ethernet.localIP());
 
-  // Tenta conectar pela primeira vez
-  conectarAoServidor();
+    // Inicia o serviço UDP
+  if (Udp.begin(localPort)) {
+    Serial.print("Servidor UDP iniciado na porta ");
+    Serial.println(localPort);
+    Serial.print("IP: ");
+    Serial.println(Ethernet.localIP());
+  } else {
+    Serial.println("Falha ao iniciar UDP.");
+    while (1);
+  }
 }
 
 void loop() {
-  // Se não estiver conectado, tenta reconectar
-  if (!conectado || !client.connected()) {
-    Serial.println("Conexão perdida. Tentando reconectar...");
-    client.stop();
-    conectarAoServidor();
-    delay(2000);
-    return;
-  }
+  // 1. Envia a mensagem
+  Udp.beginPacket(serverIp, localPort);
+  Udp.print("oi servidor");
+  Udp.endPacket();
+  Serial.println("Mensagem enviada");
 
-  // Se está conectado, envia a mensagem
-  enviarMensagem("oi servidor");
-
-  // Aguarda a resposta do servidor (com timeout de 2 segundos)
-  String resposta = "";
+  // 2. Aguarda a resposta (com timeout)
   unsigned long timeout = millis() + 2000;
-  while (client.connected() && millis() < timeout) {
-    if (client.available()) {
-      resposta = client.readString();
+  while (millis() < timeout) {
+    int packetSize = Udp.parsePacket();
+    if (packetSize) {
+      char buffer[255];
+      int len = Udp.read(buffer, 255);
+      if (len > 0) {
+        buffer[len] = 0;
+        Serial.print("Resposta do servidor: ");
+        Serial.println(buffer);
+      }
       break;
     }
   }
 
-  if (resposta.length() > 0) {
-    Serial.print("Resposta do servidor: ");
-    Serial.println(resposta);
-  } else {
-    Serial.println("Timeout: servidor não respondeu.");
-  }
-
-  // Aguarda 2 segundos antes de enviar novamente
   delay(2000);
-}
-
-// Função para tentar conectar ao servidor
-void conectarAoServidor() {
-  Serial.print("Conectando ao servidor ");
-  Serial.print(serverIp);
-  Serial.print(":");
-  Serial.println(serverPort);
-
-  if (client.connect(serverIp, serverPort)) {
-    Serial.println("Conectado ao servidor!");
-    conectado = true;
-  } else {
-    Serial.println("Falha na conexão. Tentando novamente em 2s...");
-    conectado = false;
-    delay(2000);
-  }
-}
-
-// Função para enviar uma mensagem
-void enviarMensagem(String msg) {
-  if (client.connected()) {
-    client.println(msg);
-    Serial.print("Enviado: ");
-    Serial.println(msg);
-  } else {
-    Serial.println("Erro: cliente não conectado.");
-    conectado = false;
-  }
 }

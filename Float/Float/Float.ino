@@ -1,5 +1,6 @@
 #include <SPI.h>
 #include <EthernetESP32.h>
+#include <EthernetUdp.h>
 
 // Definição explícita de todos os pinos SPI para o ESP32-S3
 #define W5500_SCLK 46
@@ -17,9 +18,9 @@ IPAddress ipServer(192, 168, 1, 10);
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 255, 0);
 
-// Cria o servidor na porta 8080
-EthernetServer server(8080);
-W5500Driver driver(W5500_CS); // Inicializa o driver com o pino CS
+W5500Driver driver(W5500_CS);
+EthernetUDP Udp;
+unsigned int localPort = 8888;  // Porta para escutar
 
 void setup() {
   Serial.begin(115200);
@@ -56,38 +57,39 @@ void setup() {
     Serial.println("Cabo Ethernet conectado.");
   }
 
-  // Inicia o servidor
-  server.begin();
-  Serial.print("Servidor rodando em: ");
-  Serial.println(Ethernet.localIP());
+    // Inicia o serviço UDP
+  if (Udp.begin(localPort)) {
+    Serial.print("Servidor UDP iniciado na porta ");
+    Serial.println(localPort);
+    Serial.print("IP: ");
+    Serial.println(Ethernet.localIP());
+  } else {
+    Serial.println("Falha ao iniciar UDP.");
+    while (1);
+  }
 }
 
 void loop() {
-  // Verifica se há um novo cliente
-  EthernetClient client = server.available();
-  
-  if (client) {
-    Serial.println("Novo cliente conectado!");
+  // Verifica se chegou um pacote UDP
+  int packetSize = Udp.parsePacket();
+  if (packetSize) {
+    Serial.print("Recebido pacote de ");
+    Serial.print(Udp.remoteIP());
+    Serial.print(":");
+    Serial.println(Udp.remotePort());
 
-    // Enquanto o cliente estiver conectado, processa as mensagens
-    while (client.connected()) {
-      if (client.available()) {
-        // Lê a mensagem completa (até quebra de linha)
-        String msg = client.readStringUntil('\n');
-        msg.trim();
-        Serial.print("Mensagem recebida: ");
-        Serial.println(msg);
-
-        // Responde imediatamente
-        client.println("msg recebida");
-        Serial.println("Resposta enviada: msg recebida");
-      }
-      // Pequeno delay para não sobrecarregar o loop
-      delay(10);
+    // Lê o pacote para um buffer
+    char buffer[255];
+    int len = Udp.read(buffer, 255);
+    if (len > 0) {
+      buffer[len] = 0; // finaliza a string
+      Serial.print("Conteúdo: ");
+      Serial.println(buffer);
     }
 
-    // Quando o cliente se desconectar
-    Serial.println("Cliente desconectado.");
-    client.stop();
+    // Envia uma resposta de volta para o remetente
+    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+    Udp.print("Mensagem recebida!");
+    Udp.endPacket();
   }
 }
