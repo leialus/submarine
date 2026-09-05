@@ -1,147 +1,128 @@
-//ESP32-S3 CAM
+#include <SPI.h>
+#include <EthernetESP32.h>
 
-#include <Arduino.h>
-#include "esp_camera.h"
-#include "sensor.h"
-#include "UDPConnection.h"
-#include "BoardConfig.h"
+// Definição dos pinos (iguais aos do servidor, mas pode ser outro ESP)
+#define W5500_SCLK 14
+#define W5500_CS   45
+#define W5500_MOSI 21
+#define W5500_MISO 47
+#define W5500_RST  48
 
-void onEvent(arduino_event_id_t event) {
-  Serial.print("Evento Ethernet: ");
-  Serial.println(event);
-}
+// MAC e IP do cliente (diferentes do servidor)
+byte macClient[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x02 };
+IPAddress ipClient(192, 168, 1, 20);
+IPAddress gateway(192, 168, 1, 1);
+IPAddress subnet(255, 255, 255, 0);
+
+// IP e porta do servidor
+IPAddress serverIp(192, 168, 1, 10);
+const int serverPort = 8080;
+
+W5500Driver driver(W5500_CS);
+
+// Cliente global para manter a conexão
+EthernetClient client;
+bool conectado = false;
 
 void setup() {
-  Network.onEvent(onEvent);
-
-  //serial
-  Serial.println("=== START SERIAL === ");
   Serial.begin(115200);
-  Serial.setDebugOutput(true);
-  esp_reset_reason_t reason = esp_reset_reason();
-  Serial.printf("Reset reason = %d\n", reason);
-  // turn camera off
- /* pinMode(PWDN_GPIO_NUM, OUTPUT);
-  digitalWrite(PWDN_GPIO_NUM, HIGH);
-  delay(1000);
+  while (!Serial) { delay(10); }
 
+  Serial.println("\n=== Cliente W5500 ===");
 
-  //Check esp32-s3 cam
-  Serial.println("=== HARDWARE CHECK ESP32-S3 CAM ===");
-  
-  uint32_t flashSize = ESP.getFlashChipSize();
-  Serial.printf("Tamanho da Flash: %d MB (%d Bytes)\n", flashSize / (1024 * 1024), flashSize);
-  
-  if (psramInit()) {
-    Serial.println("=== PSRAM initialized ===");
-    uint32_t psramSize = ESP.getPsramSize();
-    uint32_t freePsram = ESP.getFreePsram();
-    Serial.printf("Tamanho Total da PSRAM: %d MB (%d Bytes)\n", psramSize / (1024 * 1024), psramSize);
-    Serial.printf("PSRAM Livre: %d Bytes\n", freePsram);
+  // Reset do W5500
+  pinMode(W5500_RST, OUTPUT);
+  digitalWrite(W5500_RST, LOW);
+  delay(10);
+  digitalWrite(W5500_RST, HIGH);
+  delay(100);
+
+  // Inicializa SPI
+  SPI.begin(W5500_SCLK, W5500_MISO, W5500_MOSI, W5500_CS);
+
+  // Inicializa Ethernet
+  Ethernet.init(driver);
+
+  // Configura IP estático
+  Ethernet.begin(macClient, ipClient, gateway, subnet);
+
+  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+    Serial.println("ERRO: W5500 não encontrado!");
+    while (true) delay(1);
+  }
+
+  if (Ethernet.linkStatus() == LinkOFF) {
+    Serial.println("Cabo desconectado!");
   } else {
-    Serial.println("ERR: PSRAM fail or desactivated");
+    Serial.println("Cabo conectado.");
   }
 
-  //initializing camera
-  Serial.println("=== Camera initializing... ===");
+  Serial.print("IP do Cliente: ");
+  Serial.println(Ethernet.localIP());
 
-  digitalWrite(PWDN_GPIO_NUM, LOW);
-  delay(1000);
-
-  //Serial.println("\n--- WEBSERVER INIT... ---");
-  //WebServerInit();
-
-  //delay(3000);
-
-  camera_config_t config = CameraConfig();
-  esp_err_t err = esp_camera_init(&config);
-
-  if (err != ESP_OK) {
-
-    Serial.printf("Fail on camera initilizing: 0x%x\n", err);
-
-    return;
-  }
-
-  Serial.println("Camera initialized!");
-  delay(1000);
-  
-  sensor_t * s = esp_camera_sensor_get();
-  if (s != NULL) {
-    Serial.printf("Detected camera - PID: 0x%02X, VER: 0x%02X\n", s->id.PID, s->id.VER);
-  } else {
-    Serial.println("Camera detection fail");
-  }
-  
-  Serial.println("=== Camera initialized ===");
-*/
-  delay(1000);
-
-  //UDP connection
-  Serial.println("=== UDP connection initializing... ===");
-  UDPInit();
-  Serial.println("=== UDP initialized ===");
+  // Tenta conectar pela primeira vez
+  conectarAoServidor();
 }
 
 void loop() {
-  static unsigned long lastCheck = 0;
-
-  if (millis() - lastCheck >= 2000)
-  {
-    Serial.println();
-    Serial.println("-------- FLOAT --------");
-
-    Serial.print("ETH started: ");
-    Serial.println(ETH.started() ? "SIM" : "NAO");
-
-    Serial.print("Link: ");
-    Serial.println(ETH.linkUp() ? "UP" : "DOWN");
-
-    Serial.print("IP: ");
-    Serial.println(ETH.localIP());
-
-    Serial.print("remote_IP: ");
-    Serial.println(remote_IP);
-
-    Serial.print("UDP_PORT: ");
-    Serial.println(UDP_PORT);
-
-    Serial.println("---------------------------");    
-
-    lastCheck = millis();
+  // Se não estiver conectado, tenta reconectar
+  if (!conectado || !client.connected()) {
+    Serial.println("Conexão perdida. Tentando reconectar...");
+    client.stop();
+    conectarAoServidor();
+    delay(2000);
+    return;
   }
 
+  // Se está conectado, envia a mensagem
+  enviarMensagem("oi servidor");
 
-  
-  /*static unsigned long lastMem = 0;
-    if (millis() - lastMem >= 2000) {
-      lastMem = millis();
+  // Aguarda a resposta do servidor (com timeout de 2 segundos)
+  String resposta = "";
+  unsigned long timeout = millis() + 2000;
+  while (client.connected() && millis() < timeout) {
+    if (client.available()) {
+      resposta = client.readString();
+      break;
+    }
+  }
 
-      Serial.printf(
-          "Heap=%u | PSRAM=%u | MinHeap=%u | MinPSRAM=%u\n | temp=%.1f °C\n",
-          ESP.getFreeHeap(),
-          ESP.getFreePsram(),
-          ESP.getMinFreeHeap(),
-          ESP.getMinFreePsram(),
-          temperatureRead()
-      );
-  }*/
-
-   //UDP-----------------------------------------------------
-  //UDPReceiver();
-  UDPSender();
-
-  camera_fb_t *fb = esp_camera_fb_get();
-  
-  /*if (fb) {
-    size_t tamanho = fb->len;
-
-    //TODO send by UDP later
-    //WebSocketBroadcastStream(fb->buf, tamanho);
-    //webSocket.loop();
-
-    esp_camera_fb_return(fb);
+  if (resposta.length() > 0) {
+    Serial.print("Resposta do servidor: ");
+    Serial.println(resposta);
   } else {
-    Serial.println("frame capture fail");
-  }*/
+    Serial.println("Timeout: servidor não respondeu.");
+  }
+
+  // Aguarda 2 segundos antes de enviar novamente
+  delay(2000);
+}
+
+// Função para tentar conectar ao servidor
+void conectarAoServidor() {
+  Serial.print("Conectando ao servidor ");
+  Serial.print(serverIp);
+  Serial.print(":");
+  Serial.println(serverPort);
+
+  if (client.connect(serverIp, serverPort)) {
+    Serial.println("Conectado ao servidor!");
+    conectado = true;
+  } else {
+    Serial.println("Falha na conexão. Tentando novamente em 2s...");
+    conectado = false;
+    delay(2000);
+  }
+}
+
+// Função para enviar uma mensagem
+void enviarMensagem(String msg) {
+  if (client.connected()) {
+    client.println(msg);
+    Serial.print("Enviado: ");
+    Serial.println(msg);
+  } else {
+    Serial.println("Erro: cliente não conectado.");
+    conectado = false;
+  }
 }
