@@ -11,8 +11,7 @@ IPAddress localIP(192, 168, 1, 20);
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 255, 0);
 
-// IP e porta do servidor
-IPAddress clientIP(192, 168, 1, 10);
+IPAddress targetIP(192, 168, 1, 10);
 
 W5500Driver driver(W5500_CS);
 EthernetUDP Udp;
@@ -99,11 +98,11 @@ void UDPSender(){
   if ( millis() - lastPingTime >= 5000) {
     lastPingTime = millis();
     
-    Udp.beginPacket(clientIP, UDPPort);
+    Udp.beginPacket(targetIP, UDPPort);
     Udp.print("Ping do submarine!");
     Udp.endPacket();
     Serial.print("Ping enviado para ");
-    Serial.print(clientIP);
+    Serial.print(targetIP);
     Serial.print(":");
     Serial.println(UDPPort);
   }
