@@ -23,60 +23,35 @@ void WebsocketLog(const String& myMessage){
 }
 
 void setup() {
+  Network.onEvent(onEvent);
+
+  //serial
   Serial.println("=== START SERIAL === ");
   Serial.begin(115200);
+  while (!Serial) { delay(10); }
   Serial.setDebugOutput(true);
   esp_reset_reason_t reason = esp_reset_reason();
   Serial.printf("Reset reason = %d\n", reason);
 
-  Network.onEvent(onEvent);
   MyWebServerCallbacks(WebsocketLog, HanddlerCommands);
 
-  //WebServerInit();
-  //delay(1000);
-
-  UDPInit();
+  WebServerInit();
   delay(1000);
+  
+  //UDP connection
+  UDPInit();
 }
 
 void loop() {
-  
-  static unsigned long lastCheck = 0;
-
-  if (millis() - lastCheck >= 2000)
-  {
-    Serial.println();
-    Serial.println("-------- FLOAT --------");
-
-    Serial.print("ETH started: ");
-    Serial.println(ETH.started() ? "SIM" : "NAO");
-
-    Serial.print("Link: ");
-    Serial.println(ETH.linkUp() ? "UP" : "DOWN");
-
-    Serial.print("IP: ");
-    Serial.println(ETH.localIP());
-
-    Serial.print("remote_IP: ");
-    Serial.println(remote_IP);
-
-    Serial.print("UDP_PORT: ");
-    Serial.println(UDP_PORT);
-
-    Serial.println("---------------------------");    
-
-    lastCheck = millis();
-  }
-
   server.handleClient();  // Listen for incoming requests
 
   // WebSocket
   webSocket.loop();
   webSocketStream.loop();
-
+  
   //UDP-----------------------------------------------------
   UDPReceiver();
-  //UDPSender();
+  UDPSender();
   
   //TODO: create rj45 (UDP) connection
   //get frame or message

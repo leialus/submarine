@@ -1,141 +1,110 @@
 #ifndef UDPConnection
 #define UDPConnection
 
-#include <SPI.h> 
-#include <ETH.h>
-#include <WiFiUdp.h>
+#include <SPI.h>
+#include <EthernetESP32.h>
+#include <EthernetUdp.h>
 #include "BoardConfig.h"
 
-//My IP
-IPAddress local_IP(192, 168, 10, 2);
-IPAddress gateway(192, 168, 10, 254);
+byte myMacAddress[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x02 };
+IPAddress localIP(192, 168, 1, 20);
+IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 255, 0);
 
-//conect to
-IPAddress remote_IP(192, 168, 10, 1);
+IPAddress targetIP(192, 168, 1, 10);
 
-WiFiUDP udp;
-const uint16_t UDP_PORT = 5000;
+W5500Driver driver(W5500_CS);
+EthernetUDP Udp;
+
+const int UDPPort = 8888;
 
 void UDPInit()
 {
   Serial.println();
   Serial.println("===  W5500 initializing... ===");
 
-  // GPIO
-  pinMode(W5500_CS, OUTPUT);
-  digitalWrite(W5500_CS, HIGH);
-
+  // W5500 reset
   pinMode(W5500_RST, OUTPUT);
+  digitalWrite(W5500_RST, LOW);
+  delay(10);
   digitalWrite(W5500_RST, HIGH);
+  delay(100);
 
-  // SPI
+  // Inicialize SPI with desired pins
   SPI.begin(W5500_SCLK, W5500_MISO, W5500_MOSI, W5500_CS);
 
-  Serial.println("SPI initialized.");
-  bool resultado = ETH.begin(ETH_PHY_W5500, 1, W5500_CS, -1, W5500_RST, SPI);
-  unsigned long startAttempt = millis();
-  while (!ETH.started() && (millis() - startAttempt < 5000)) {
-    delay(100);
+  // Set ethernet driver on ethernet class
+  Ethernet.init(driver);
+  
+  Serial.println("===  Ethernet and UDP connecting... ===");
+
+  // initialize static IP ethernet
+  Ethernet.begin(myMacAddress, localIP, gateway, subnet);
+
+  // Check ethernet hardware
+  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+    Serial.println("ERRO: Hardware W5500 not finded!");
+    while (true) { delay(1); }
   }
 
-  Serial.print("ETH.begin(): ");
-  Serial.println(resultado ? "OK" : "Fail to initialize");
-
-  ETH.config(local_IP, gateway, subnet);
-  startAttempt = millis();
-  while (!ETH.linkUp() && (millis() - startAttempt < 5000)) {
-    delay(100);
+  // Check cable connection
+  if (Ethernet.linkStatus() == LinkOFF) {
+    Serial.println("ERRO: Ethernet not connected!");
+  } else {
+    Serial.println("Ethernet connected.");
   }
 
-  delay(1000);
-
-  Serial.println();
-  Serial.println("=== Check link ===");
-
-  Serial.print("ETH started: ");
-  Serial.println(ETH.started() ? "SIM" : "NAO");
-
-  Serial.print("IP: ");
-  Serial.println(ETH.localIP());
-
-  Serial.print("Link: ");
-  Serial.println(ETH.linkUp() ? "UP" : "DOWN");
-
-  Serial.print("MAC: ");
-  Serial.println(ETH.macAddress());
-
-  // Start UDP
-  if (udp.begin(UDP_PORT))
-  {
-    Serial.print("Initialized UDP at port: ");
-    Serial.println(UDP_PORT);
-  }
-  else
-  {
-    Serial.println("Fail to UDP initiale");
+  // Initialize UDP service
+  if (Udp.begin(UDPPort)) {
+    Serial.print("Servidor UDP started at Port:");
+    Serial.println(UDPPort);
+    Serial.print("IP: ");
+    Serial.println(Ethernet.localIP());
+  } else {
+    Serial.println("Fail to inicialize UDP.");
+    while (1);
   }
 
-  Serial.println("===  UDP Conected ===");
+  Serial.println("===  Ethernet and UDP connected ===");
 }
 
 void UDPReceiver(){
-  int packetSize = udp.parsePacket();
-  if (packetSize > 0)
-  {
-    char buffer[128];
+  int packetSize = Udp.parsePacket();
+  if (packetSize) {
+    // Lê a mensagem
+    char buffer[255];
+    int len = Udp.read(buffer, 255);
+    if (len > 0) {
+      buffer[len] = 0;
+      Serial.print("Recebido de ");
+      Serial.print(Udp.remoteIP());
+      Serial.print(":");
+      Serial.print(Udp.remotePort());
+      Serial.print(" -> ");
+      Serial.println(buffer);
+    }
 
-    int len = udp.read(
-      buffer,
-      sizeof(buffer) - 1
-    );
-
-    if (len > 0)
-      buffer[len] = '\0';
-    else
-      buffer[0] = '\0';
-
-    Serial.println();
-    Serial.println("====== UDP RECEBIDO ======");
-
-    Serial.print("De: ");
-    Serial.println(udp.remoteIP());
-
-    Serial.print("Porta: ");
-    Serial.println(udp.remotePort());
-
-    Serial.print("Mensagem: ");
-    Serial.println(buffer);
-
-    Serial.println("==========================");
+    //// to send an answer
+    // Udp.beginPacket(Udp.remoteIP(), Udp.remotePort);
+    // Udp.print("Mensagem recebida do submarine!");
+    // Udp.endPacket();
+    // Serial.println("Resposta enviada.");
   }
 
 }
 
+unsigned long lastPingTime = 0;
 void UDPSender(){
-//send
-  static unsigned long ultimoEnvio = 0;
-
-  if (millis() - ultimoEnvio >= 2000)
-  {
-    ultimoEnvio = millis();
-
-    const char *mensagem = "OLA ESP32 Float";
-
-    if (udp.beginPacket(remote_IP, UDP_PORT)) {
-
-      udp.write((const uint8_t *)mensagem, strlen(mensagem));
-
-      int resultadoEnvio = udp.endPacket();
-
-      Serial.print("Enviado: ");
-      Serial.println(mensagem);
-
-      Serial.print("Resultado UDP: ");
-      Serial.println(resultadoEnvio == 1 ? "Sended" : "Fail to send");
-    } else {
-      Serial.println("beginPacket() FALHOU");
-    }
+  if ( millis() - lastPingTime >= 5000) {
+    lastPingTime = millis();
+    
+    Udp.beginPacket(targetIP, UDPPort);
+    Udp.print("Ping do submarine!");
+    Udp.endPacket();
+    Serial.print("Ping enviado para ");
+    Serial.print(targetIP);
+    Serial.print(":");
+    Serial.println(UDPPort);
   }
 }
 
