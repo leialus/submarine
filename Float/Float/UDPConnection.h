@@ -5,6 +5,7 @@
 #include <EthernetESP32.h>
 #include <EthernetUdp.h>
 #include "BoardConfig.h"
+#include "FrameHanddler.h"
 
 byte myMacAddress[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x01 };
 IPAddress localIP(192, 168, 1, 10);
@@ -17,6 +18,12 @@ W5500Driver driver(W5500_CS);
 EthernetUDP Udp;
 
 const int UDPPort = 8888;
+
+inline void (*onToSendFrameSlice)(const uint8_t* data, size_t len) = nullptr;
+
+void UDPConnectionCallback(void (*ToSendFrameSlice)(const uint8_t* data, size_t len)) {
+    onToSendFrameSlice = ToSendFrameSlice;
+}
 
 void UDPInit()
 {
@@ -105,6 +112,31 @@ void UDPSender(){
     Serial.print(targetIP);
     Serial.print(":");
     Serial.println(UDPPort);
+  }
+}
+
+void UDPReceptFrameSlice() {
+  uint8_t buffer[2048];
+
+  while (true) {
+    int packetSize = Udp.parsePacket();
+    if (packetSize) {
+
+      int len = Udp.read(buffer, sizeof(buffer));
+      if (len >= sizeof(PacketHeader)) {
+
+        PacketHeader* header = (PacketHeader*)buffer;
+        
+        if (onToSendFrameSlice != nullptr) {
+          DebugPacketHeader(*header);
+          onToSendFrameSlice(buffer, len);
+        }
+
+      } else {
+        Serial.println("Pacote muito curto (cabeçalho incompleto)");
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 

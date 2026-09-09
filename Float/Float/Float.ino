@@ -9,10 +9,12 @@ void onEvent(arduino_event_id_t event) {
   Serial.println(event);
 }
 
+//Received action ballback
 void HanddlerCommands(int btn, int action){
   //TODO: send command to submarine using UDP
 }
 
+//Message callback to send by websocket
 void WebsocketLog(const String& myMessage){
   String message = myMessage;
   message + "\n";
@@ -20,6 +22,14 @@ void WebsocketLog(const String& myMessage){
   if (message.length() > 0) {
     WebSocketBroadcastMessage(message);
   }
+}
+
+void TaskReceptorUDP(void *pvParameters) {
+  UDPReceptFrameSlice();
+}
+
+void SendFrameSliceCallback(const uint8_t* data, size_t len) {
+  WebSocketBroadcastStream(data, len);
 }
 
 void setup() {
@@ -40,6 +50,8 @@ void setup() {
   
   //UDP connection
   UDPInit();
+  UDPConnectionCallback(SendFrameSliceCallback);
+  xTaskCreatePinnedToCore(TaskReceptorUDP, "ReceptorUDP", 4096, NULL, 2, NULL, 1);
 }
 
 void loop() {
@@ -48,10 +60,6 @@ void loop() {
   // WebSocket
   webSocket.loop();
   webSocketStream.loop();
-  
-  //UDP-----------------------------------------------------
-  UDPReceiver();
-  UDPSender();
   
   //TODO: create rj45 (UDP) connection
   //get frame or message

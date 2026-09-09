@@ -108,4 +108,11 @@ void UDPSender(){
   }
 }
 
+void sendFrameSlice(const PacketHeader& header, const uint8_t* data, size_t data_len) {
+  Udp.beginPacket(targetIP, UDPPort);
+  Udp.write((uint8_t*)&header, sizeof(header));
+  Udp.write(data, data_len);
+  Udp.endPacket();
+}
+
 #endif

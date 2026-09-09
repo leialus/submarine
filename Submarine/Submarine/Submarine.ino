@@ -1,8 +1,7 @@
 //ESP32-S3 CAM
 
-#include "esp_camera.h"
 #include "sensor.h"
-#include "BoardConfig.h"
+#include "CameraStream.h"
 #include "UDPConnection.h"
 
 void onEvent(arduino_event_id_t event) {
@@ -21,63 +20,23 @@ void setup() {
   esp_reset_reason_t reason = esp_reset_reason();
   Serial.printf("Reset reason = %d\n", reason);
 
-  // turn camera off
-  pinMode(PWDN_GPIO_NUM, OUTPUT);
-  digitalWrite(PWDN_GPIO_NUM, HIGH);
-  delay(1000);
-
-  //Check esp32-s3 cam
-  Serial.println("=== HARDWARE CHECK ESP32-S3 CAM ===");
-  
-  uint32_t flashSize = ESP.getFlashChipSize();
-  Serial.printf("Tamanho da Flash: %d MB (%d Bytes)\n", flashSize / (1024 * 1024), flashSize);
-  
-  if (psramInit()) {
-    Serial.println("=== PSRAM initialized ===");
-    uint32_t psramSize = ESP.getPsramSize();
-    uint32_t freePsram = ESP.getFreePsram();
-    Serial.printf("Tamanho Total da PSRAM: %d MB (%d Bytes)\n", psramSize / (1024 * 1024), psramSize);
-    Serial.printf("PSRAM Livre: %d Bytes\n", freePsram);
-  } else {
-    Serial.println("ERR: PSRAM fail or desactivated");
-  }
-
-  //initializing camera
-  Serial.println("=== Camera initializing... ===");
-
-  digitalWrite(PWDN_GPIO_NUM, LOW);
-  delay(1000);
-
-  camera_config_t config = CameraConfig();
-  esp_err_t err = esp_camera_init(&config);
-
-  if (err != ESP_OK) {
-
-    Serial.printf("Fail on camera initilizing: 0x%x\n", err);
-
-    return;
-  }
-
-  Serial.println("Camera initialized!");
-  delay(1000);
-  
-  sensor_t * s = esp_camera_sensor_get();
-  if (s != NULL) {
-    Serial.printf("Detected camera - PID: 0x%02X, VER: 0x%02X\n", s->id.PID, s->id.VER);
-  } else {
-    Serial.println("Camera detection fail");
-  }
-  
-  Serial.println("=== Camera initialized ===");
-
-  delay(1000);
+  //Start camera streaming
+  CameraStreamCallback(ToSendFrameSlice);
+  StreamInit();
 
   //UDP connection
   UDPInit();
+
+  //create async task to send frames slices
+  xTaskCreatePinnedToCore(FrameSplit, "FrameSplit", 8192, NULL, 3, NULL, 1);
+}
+
+//calback to send UDP images slices
+void ToSendFrameSlice(const PacketHeader& header, const uint8_t* data, size_t data_len) {
+  sendFrameSlice(header, data, data_len);
 }
 
 void loop() {
-
   static unsigned long lastMem = 0;
     if (millis() - lastMem >= 2000) {
       lastMem = millis();
@@ -90,22 +49,5 @@ void loop() {
           ESP.getMinFreePsram(),
           temperatureRead()
       );
-  }
-
-  //UDP-----------------------------------------------------
-  UDPReceiver();
-  UDPSender();
-
-  camera_fb_t *fb = esp_camera_fb_get();
-  
-  if (fb) {
-    size_t tamanho = fb->len;
-
-    //TODO send by UDP later
-    Serial.println(tamanho);
-
-    esp_camera_fb_return(fb);
-  } else {
-    Serial.println("frame capture fail");
   }
 }

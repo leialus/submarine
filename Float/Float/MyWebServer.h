@@ -132,7 +132,7 @@ void WebServerInit() {
   Serial.println("=== WebSocket Server initialized!=== ");  
 }
 
-void WebSocketBroadcastStream(uint8_t * buf, size_t len){
+void WebSocketBroadcastStream(const uint8_t * buf, size_t len){
   webSocketStream.broadcastBIN(buf, len);
 }
 
