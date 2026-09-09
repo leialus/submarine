@@ -6,6 +6,7 @@
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
 #include "Webpage.h"
+#include "FrameHanddler.h"
 
 inline void (*onToWebSendMessage)(const String&) = nullptr;
 inline void (*onActionUpdate)(const int, const int) = nullptr;
@@ -107,6 +108,8 @@ void webSocketStreamEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t l
 }
 
 void WebServerInit() {
+  frameSlicesQueue = xQueueCreate(QUEUE_SIZE, sizeof(PacketData));
+
   Serial.println("=== WiFi initializing... ===");
   WiFi.softAP(ssid, password);
   Serial.println("Online: " + String(ssid));
@@ -132,8 +135,20 @@ void WebServerInit() {
   Serial.println("=== WebSocket Server initialized!=== ");  
 }
 
-void WebSocketBroadcastStream(const uint8_t * buf, size_t len){
-  webSocketStream.broadcastBIN(buf, len);
+void WebSocketBroadcastStream(){
+  PacketData pkt;
+  while (xQueueReceive(frameSlicesQueue, &pkt, 0) == pdTRUE) {
+
+    if (pkt.len >= sizeof(PacketHeader)) {
+      webSocketStream.broadcastBIN(pkt.data, pkt.len);
+      
+      PacketHeader* header = (PacketHeader*)pkt.data;
+      Serial.printf("[DEBUG after broadcast] frameId=%u, totalSize=%u, chunkId=%u/%u\n",
+                    header->frameId, header->totalSize, header->chunkId+1, header->totalChunks);
+    }
+
+    free(pkt.data); 
+  }
 }
 
 void WebSocketBroadcastMessage(String message){

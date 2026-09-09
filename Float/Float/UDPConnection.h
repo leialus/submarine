@@ -19,10 +19,10 @@ EthernetUDP Udp;
 
 const int UDPPort = 8888;
 
-inline void (*onToSendFrameSlice)(const uint8_t* data, size_t len) = nullptr;
+inline void (*onToQueueSlice)(const uint8_t* data, size_t len) = nullptr;
 
-void UDPConnectionCallback(void (*ToSendFrameSlice)(const uint8_t* data, size_t len)) {
-    onToSendFrameSlice = ToSendFrameSlice;
+void UDPConnectionCallback(void (*ToQueueSlice)(const uint8_t* data, size_t len)) {
+    onToQueueSlice = ToQueueSlice;
 }
 
 void UDPInit()
@@ -127,16 +127,17 @@ void UDPReceptFrameSlice() {
 
         PacketHeader* header = (PacketHeader*)buffer;
         
-        if (onToSendFrameSlice != nullptr) {
+        if (onToQueueSlice != nullptr) {
           DebugPacketHeader(*header);
-          onToSendFrameSlice(buffer, len);
+          onToQueueSlice(buffer, len);
         }
 
       } else {
         Serial.println("Pacote muito curto (cabeçalho incompleto)");
       }
     }
-    vTaskDelay(pdMS_TO_TICKS(1));
+
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 

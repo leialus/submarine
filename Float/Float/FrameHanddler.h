@@ -1,6 +1,14 @@
 #ifndef FrameHanddler
 #define FrameHanddler
 
+QueueHandle_t frameSlicesQueue;
+
+#define QUEUE_SIZE 10
+struct PacketData {
+    uint8_t* data;
+    size_t len;
+};
+
 struct PacketHeader {
     uint32_t frameId;       // Fame inique ID
     uint32_t totalSize;     // bytes total size

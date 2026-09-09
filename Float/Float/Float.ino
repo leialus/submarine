@@ -28,8 +28,16 @@ void TaskReceptorUDP(void *pvParameters) {
   UDPReceptFrameSlice();
 }
 
-void SendFrameSliceCallback(const uint8_t* data, size_t len) {
-  WebSocketBroadcastStream(data, len);
+void AddQueueSlices(const uint8_t* data, size_t len) {
+  uint8_t* dataCopy = (uint8_t*)malloc(len);
+  if (dataCopy) {
+      memcpy(dataCopy, data, len);
+      PacketData pkt = { dataCopy, len };
+      if (xQueueSend(frameSlicesQueue, &pkt, 0) != pdTRUE) {
+          free(dataCopy); // queue is full
+          Serial.println("queue is full drop package");
+      }
+  }
 }
 
 void setup() {
@@ -50,16 +58,32 @@ void setup() {
   
   //UDP connection
   UDPInit();
-  UDPConnectionCallback(SendFrameSliceCallback);
-  xTaskCreatePinnedToCore(TaskReceptorUDP, "ReceptorUDP", 4096, NULL, 2, NULL, 1);
+  UDPConnectionCallback(AddQueueSlices);
+  xTaskCreatePinnedToCore(TaskReceptorUDP, "ReceptorUDP", 4096, NULL, 1, NULL, 1);
 }
 
 void loop() {
+  static unsigned long lastMem = 0;
+  if (millis() - lastMem >= 2000) {
+    lastMem = millis();
+
+    Serial.printf(
+      "Heap=%u | PSRAM=%u | MinHeap=%u | MinPSRAM=%u\n | temp=%.1f °C\n",
+      ESP.getFreeHeap(),
+      ESP.getFreePsram(),
+      ESP.getMinFreeHeap(),
+      ESP.getMinFreePsram(),
+      temperatureRead()
+    );
+  }
+
   server.handleClient();  // Listen for incoming requests
 
   // WebSocket
   webSocket.loop();
   webSocketStream.loop();
+
+  WebSocketBroadcastStream();
   
   //TODO: create rj45 (UDP) connection
   //get frame or message

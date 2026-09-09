@@ -38,16 +38,16 @@ void ToSendFrameSlice(const PacketHeader& header, const uint8_t* data, size_t da
 
 void loop() {
   static unsigned long lastMem = 0;
-    if (millis() - lastMem >= 2000) {
-      lastMem = millis();
+  if (millis() - lastMem >= 2000) {
+    lastMem = millis();
 
-      Serial.printf(
-          "Heap=%u | PSRAM=%u | MinHeap=%u | MinPSRAM=%u\n | temp=%.1f °C\n",
-          ESP.getFreeHeap(),
-          ESP.getFreePsram(),
-          ESP.getMinFreeHeap(),
-          ESP.getMinFreePsram(),
-          temperatureRead()
-      );
+    Serial.printf(
+      "Heap=%u | PSRAM=%u | MinHeap=%u | MinPSRAM=%u\n | temp=%.1f °C\n",
+      ESP.getFreeHeap(),
+      ESP.getFreePsram(),
+      ESP.getMinFreeHeap(),
+      ESP.getMinFreePsram(),
+      temperatureRead()
+    );
   }
 }

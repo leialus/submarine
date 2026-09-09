@@ -234,7 +234,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     }
   </style>
   <script>
-	const host = location.hostname || "localhost";
+	  const host = location.hostname || "localhost";
 	
     const socket = new WebSocket("ws://" + host + ":81/");
 	
@@ -249,7 +249,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       }
       socket.send(JSON.stringify(command));
     }
-
+	
     function bindButton(el, name) {
       const press   = () => sendCommand({ name, action: "press" });
       const release = () => sendCommand({ name, action: "release" });
@@ -275,33 +275,84 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       bindButton(document.getElementById("yBtn"),      "y");
       bindButton(document.getElementById("startBtn"),  "start");
       bindButton(document.getElementById("selectBtn"), "select");
-
     };
 	
     // ---- Video WebSocket (Port 82) ----
     const streamSocket = new WebSocket("ws://" + host + ":82/");
-    streamSocket.binaryType = "blob";
-
-    let displaying = false;
+	streamSocket.binaryType = "arraybuffer";
 	
-    streamSocket.onmessage = async (event) => {
-      if (displaying) {
-        return;
+    let displaying = false;
+    let stream = null;
+	
+	const HEADER_SIZE = 16;
+	const ESP32_CHUNK_SIZE = 1384;
+	let framesCache = {}; 
+		
+	streamSocket.onmessage = function(event) {
+      let data = event.data;
+
+		  console.log("size: " + data.byteLength);
+
+      if (!stream) {
+        stream = document.getElementById("stream");
+      }
+      
+
+      if (data.byteLength < HEADER_SIZE) {
+          console.warn('too short package:', data.byteLength);
+          return;
       }
 
-      const stream = document.getElementById("stream");
-      if (!stream) return; 
+	  //header bytes
+      const header = new Uint32Array(data, 0, 4);
+      const frameId = header[0];
+      const totalSize = header[1];
+      const chunkId = header[2];
+      const totalChunks = header[3];
+	  
+      console.log(`frameId, totalSize, chunkId/totalChunks`);
+    
+	  //image bytes
+      const chunkData = new Uint8Array(data, HEADER_SIZE);
+	  
+	  //dictionary with frame id as key and struct {total slices, current received, total image size}
+	  if (!framesCache[frameId]) {
+        framesCache[frameId] = {
+            totalChunks: totalChunks,
+            chunksReceived: 0,
+            buffer: new Uint8Array(totalSize) //alocate total image size
+        };
+      }
+	  
+	  const currentFrame = framesCache[frameId];
+	  
+	  const offset = chunkId * ESP32_CHUNK_SIZE; 
+	  
+	  currentFrame.buffer.set(chunkData, offset);
+      currentFrame.chunksReceived++;
+	  
+	  //if received all image slices
+	  if (currentFrame.chunksReceived === currentFrame.totalChunks) {
+        // Cria o arquivo binário em memória
+        const blob = new Blob([currentFrame.buffer], { type: 'image/jpeg' });
+        const imageUrl = URL.createObjectURL(blob);
+        
+		//dispose current frame
+        URL.revokeObjectURL(stream.src);
 
-      displaying = true;
+        //show new frame
+        stream.src = imageUrl;
 
-      const url = URL.createObjectURL(event.data);
-
-      stream.onload = () => {
-        URL.revokeObjectURL(url);
-        displaying = false;
-      };
-
-      stream.src = url;
+        //remove frame from dictionary
+        delete framesCache[frameId];
+        
+        //remove fron dictionary any other frame if his ID is lower than the current one
+        Object.keys(framesCache).forEach(id => {
+		  if (parseInt(id) < frameId) {
+		 	delete framesCache[id];
+		  }
+        });
+      }
     };
 	
   </script>
@@ -368,4 +419,5 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   </div>
 </body>
 </html>
+
 )rawliteral";

@@ -6,7 +6,7 @@
 #include "BoardConfig.h"
 
 struct PacketHeader {
-    uint32_t frameId;       // Fame inique ID
+    uint32_t frameId;       // fame unique ID
     uint32_t totalSize;     // bytes total size
     uint32_t chunkId;       // slice index
     uint32_t totalChunks;   // total fragments size expected
@@ -93,7 +93,7 @@ void FrameSplit(void *pvParameters) {
       continue;
     }
 
-    // calc how mane slice given the frame size
+    // calc how many slice given the frame size
     size_t total_bytes = fb->len;
     size_t total_chunks = (total_bytes + CHUNK_DATA_SIZE - 1) / CHUNK_DATA_SIZE;
     static uint32_t frame_id = 0;
@@ -110,8 +110,8 @@ void FrameSplit(void *pvParameters) {
         DebugPacketHeader(header);
       }
 
-      // short time out to not overloas connection queue core usage by this task
-      taskYIELD();
+      // short time out to not overload connection queue core usage by this task
+      vTaskDelay(pdMS_TO_TICKS(10)); 
     }
 
     esp_camera_fb_return(fb);
