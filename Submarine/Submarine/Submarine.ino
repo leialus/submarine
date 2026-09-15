@@ -1,5 +1,6 @@
 //ESP32-S3 CAM
 
+#include <WiFi.h>
 #include "MyAction.h"
 #include "sensor.h"
 #include "CameraStream.h"
@@ -20,6 +21,7 @@ void HanddlerCommands(const ActionPackage& actionPackage){
 }
 
 void setup() {
+  WiFi.mode(WIFI_OFF);
   Network.onEvent(onEvent);
 
   //serial

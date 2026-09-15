@@ -28,7 +28,7 @@
 #define W5500_CS   45
 #define W5500_MOSI 21
 #define W5500_MISO 47
-#define W5500_RST  48
+#define W5500_RST  39
 
 //Config functions ----------------------------------
 

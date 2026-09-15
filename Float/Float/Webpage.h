@@ -284,6 +284,12 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     const socket = new WebSocket("ws://" + host + ":81/");
 	socket.binaryType = "arraybuffer";
 
+	function currentTime() {
+	  const d = new Date();
+	  const pad = n => String(n).padStart(2, "0");
+	  return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+	}
+
 	function escapeHtml(str) {
 	  const div = document.createElement("div");
 	  div.textContent = str;
@@ -308,7 +314,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 	}
 
     function LogMessageEvent(data) {
-	  logMessages.push(data);
+	  logMessages.push("[" + currentTime() + "] " + data);
 	  if (logMessages.length > MAX_MENSAGES) logMessages.shift();
 	  renderMensagens();
 	}
@@ -441,7 +447,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 		renderMensagens();
 	  });
 
-	  logMessages.push("Aguardando mensagens...");
+	  logMessages.push("[" + currentTime() + "] Aguardando mensagens...");
 	  renderMensagens();
     };
 	
@@ -510,4 +516,5 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   </div>
 </body>
 </html>
+
 )rawliteral";

@@ -279,6 +279,12 @@
     const socket = new WebSocket("ws://" + host + ":81/");
 	socket.binaryType = "arraybuffer";
 
+	function currentTime() {
+	  const d = new Date();
+	  const pad = n => String(n).padStart(2, "0");
+	  return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+	}
+
 	function escapeHtml(str) {
 	  const div = document.createElement("div");
 	  div.textContent = str;
@@ -303,7 +309,7 @@
 	}
 
     function LogMessageEvent(data) {
-	  logMessages.push(data);
+	  logMessages.push("[" + currentTime() + "] " + data);
 	  if (logMessages.length > MAX_MENSAGES) logMessages.shift();
 	  renderMensagens();
 	}
@@ -436,7 +442,7 @@
 		renderMensagens();
 	  });
 
-	  logMessages.push("Aguardando mensagens...");
+	  logMessages.push("[" + currentTime() + "] Aguardando mensagens...");
 	  renderMensagens();
     };
 	
