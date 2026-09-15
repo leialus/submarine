@@ -20,9 +20,11 @@ EthernetUDP Udp;
 const int UDPPort = 8888;
 
 inline void (*onToQueueSlice)(const uint8_t* data, size_t len) = nullptr;
+inline void (*onToWebSendTelemetry)(const String&) = nullptr;
 
-void UDPConnectionCallback(void (*ToQueueSlice)(const uint8_t* data, size_t len)) {
-    onToQueueSlice = ToQueueSlice;
+void UDPConnectionCallback(void (*ToQueueSlice)(const uint8_t* data, size_t len), void (*ToWebSendMessageCallback)(const String&)) {
+  onToQueueSlice = ToQueueSlice;
+  onToWebSendTelemetry = ToWebSendMessageCallback;
 }
 
 void UDPInit()
@@ -100,19 +102,10 @@ void UDPReceiver(){
 
 }
 
-unsigned long lastPingTime = 0;
-void UDPSender(){
-  if ( millis() - lastPingTime >= 5000) {
-    lastPingTime = millis();
-    
-    Udp.beginPacket(targetIP, UDPPort);
-    Udp.print("Ping do float!");
-    Udp.endPacket();
-    Serial.print("Ping enviado para ");
-    Serial.print(targetIP);
-    Serial.print(":");
-    Serial.println(UDPPort);
-  }
+void UDPSenderComand(const ActionPackage& actionPackage) {
+  Udp.beginPacket(targetIP, UDPPort);
+  Udp.write((uint8_t*)&actionPackage, sizeof(actionPackage));
+  Udp.endPacket();
 }
 
 void UDPReceptFrameSlice() {
@@ -121,23 +114,35 @@ void UDPReceptFrameSlice() {
   while (true) {
     int packetSize = Udp.parsePacket();
     if (packetSize) {
-
       int len = Udp.read(buffer, sizeof(buffer));
-      if (len >= sizeof(PacketHeader)) {
 
+      if (buffer[0] == '#') {
+        //telemetry message
+
+        int textSize = (len < sizeof(buffer)) ? len : sizeof(buffer) - 1;
+        buffer[textSize] = '\0'; 
+
+        String stringRecebida = String((char*)buffer);
+
+        if (onToWebSendTelemetry != nullptr){
+          onToWebSendTelemetry(stringRecebida);
+        }
+
+      }else if (len >= sizeof(PacketHeader)) {
+        //flame data
         PacketHeader* header = (PacketHeader*)buffer;
         
         if (onToQueueSlice != nullptr) {
-          DebugPacketHeader(*header);
+          //DebugPacketHeader(*header);
           onToQueueSlice(buffer, len);
         }
 
       } else {
-        Serial.println("Pacote muito curto (cabeçalho incompleto)");
+        Serial.println("Header is too short or incomplete");
       }
     }
 
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 

@@ -18,6 +18,12 @@ EthernetUDP Udp;
 
 const int UDPPort = 8888;
 
+inline void (*onActionUpdate)(const ActionPackage&) = nullptr;
+
+void MyUDPConnectionCallbacks(void (*ActionCallback)(const ActionPackage&)) {
+  onActionUpdate = ActionCallback;
+}
+
 void UDPInit()
 {
   Serial.println();
@@ -70,18 +76,19 @@ void UDPInit()
 
 void UDPReceiver(){
   int packetSize = Udp.parsePacket();
-  if (packetSize) {
-    // Lê a mensagem
-    char buffer[255];
-    int len = Udp.read(buffer, 255);
-    if (len > 0) {
-      buffer[len] = 0;
-      Serial.print("Recebido de ");
-      Serial.print(Udp.remoteIP());
-      Serial.print(":");
-      Serial.print(Udp.remotePort());
-      Serial.print(" -> ");
-      Serial.println(buffer);
+  if (packetSize > 0) {
+    ActionPackage actionPackage(0, 0, false);
+
+    if (packetSize == sizeof(ActionPackage)) {
+      
+      Udp.read((char*)&actionPackage, sizeof(ActionPackage));
+      if (onActionUpdate != nullptr){
+        onActionUpdate(actionPackage);
+      }
+
+    } else {
+      Serial.print("UDP package size does not match: ");
+      Serial.println(packetSize);
     }
 
     //// to send an answer
@@ -93,19 +100,11 @@ void UDPReceiver(){
 
 }
 
-unsigned long lastPingTime = 0;
-void UDPSender(){
-  if ( millis() - lastPingTime >= 5000) {
-    lastPingTime = millis();
-    
-    Udp.beginPacket(targetIP, UDPPort);
-    Udp.print("Ping do submarine!");
-    Udp.endPacket();
-    Serial.print("Ping enviado para ");
-    Serial.print(targetIP);
-    Serial.print(":");
-    Serial.println(UDPPort);
-  }
+void UDPSenderTelemetry(String telemetry){
+  if (telemetry.length() < 5) return;
+  Udp.beginPacket(targetIP, UDPPort);
+  Udp.print(telemetry);
+  Udp.endPacket();
 }
 
 void sendFrameSlice(const PacketHeader& header, const uint8_t* data, size_t data_len) {

@@ -107,7 +107,7 @@ void FrameSplit(void *pvParameters) {
       PacketHeader header(frame_id, total_bytes, i, total_chunks);
       if(onToSendFrameSlice != nullptr) {
         onToSendFrameSlice(header, fb->buf + offset, data_len);
-        DebugPacketHeader(header);
+        //DebugPacketHeader(header);
       }
 
       // short time out to not overload connection queue core usage by this task
@@ -118,7 +118,7 @@ void FrameSplit(void *pvParameters) {
     frame_id++;
 
     // hardcode controll FPS
-    vTaskDelay(pdMS_TO_TICKS(5000)); 
+    vTaskDelay(pdMS_TO_TICKS(1)); 
   }
 }
 

@@ -9,20 +9,12 @@
 #include "FrameHanddler.h"
 
 inline void (*onToWebSendMessage)(const String&) = nullptr;
-inline void (*onActionUpdate)(const int, const int) = nullptr;
+inline void (*onActionUpdate)(const ActionPackage&) = nullptr;
 
-void MyWebServerCallbacks(void (*ToWebSendMessageCallback)(const String&), void (*ActionCallback)(const int, const int)) {
+void MyWebServerCallbacks(void (*ToWebSendMessageCallback)(const String&), void (*ActionCallback)(const ActionPackage&)) {
   onToWebSendMessage = ToWebSendMessageCallback;
   onActionUpdate = ActionCallback;
 }
-
-const char* buttonNames[] = {
-  "up", "down", "left", "right",
-  "a", "b", "x", "y",
-  "start", "select"
-};
-
-const int numButtons = sizeof(buttonNames) / sizeof(buttonNames[0]);
 
 const char* ssid = "001ROV";
 const char* password = "12345678";
@@ -33,78 +25,53 @@ WebServer server(80);
 //web Sockets at 81
 WebSocketsServer webSocket = WebSocketsServer(81);
 
-//web Sockets at 82
-WebSocketsServer webSocketStream = WebSocketsServer(82);
-
 void handleRoot() {
   server.send_P(200, "text/html", WEBPAGE_HTML);
 }
 
-int getButtonId(const String& name) {
-  for (int i = 0; i < numButtons; i++) {
-    if (name == String(buttonNames[i])) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-void handleButton(const String& button, bool pressed) {
-  Serial.print(button);
-  Serial.println(pressed ? " PRESSED" : " RELEASED");
-
-  int id = getButtonId(button);
-  Serial.write(0xFF);
-  Serial.write(pressed ? 1 : 0);
-  Serial.write(id);
-
-  server.send(200, "text/plain", "OK");
-
-  String message = button;
-  message += pressed ? " PRESSED" : " RELEASED";
+void handleButton(ActionPackage actionPackage) {
+  String message = (actionPackage.typeMessage == 0) ? "to Float: " : "to submarine: ";
+  message += String(actionPackage.button);
+  message += actionPackage.action ? " PRESSED" : " RELEASED";
 
   if (onToWebSendMessage) {
     onToWebSendMessage(message);
   }
 
   if (onActionUpdate) {
-    onActionUpdate(id, pressed);
+    onActionUpdate(actionPackage);
   }
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
-  if (type != WStype_TEXT) {
+  if (type == WStype_BIN) {
+    if (length == sizeof(ActionPackage)) {
+      ActionPackage actionPackage(0, 0, 0);
+
+      memcpy(&actionPackage, payload, sizeof(ActionPackage));
+      
+      handleButton(actionPackage); 
+    } else {
+      Serial.println("Err: Tinvalid package size.");
+    }
+  } else if (type == WStype_TEXT) {
+    String mensagem = String((char*)payload);
+
+    StaticJsonDocument<200> doc;
+
+    DeserializationError error = deserializeJson(doc, mensagem);
+
+    if (error) {
+      Serial.print("Erro JSON: ");
+      Serial.println(error.c_str());
+      return;
+    }
+
+    const char* str1   = doc["field1"];
+
+    //Do something
     return;
-  }
-
-  String mensagem = String((char*)payload);
-
-  StaticJsonDocument<200> doc;
-
-  DeserializationError error = deserializeJson(doc, mensagem);
-
-  if (error) {
-    Serial.print("Erro JSON: ");
-    Serial.println(error.c_str());
-    return;
-  }
-
-  const char* name   = doc["name"];
-  const char* action = doc["action"];
-
-  if (name == nullptr || action == nullptr) {
-    Serial.println("Mensagem invalida.");
-    return;
-  }
-
-  Serial.println("fst");
-  bool pressed = strcmp(action, "press") == 0;
-
-  handleButton(String(name), pressed);
-}
-
-void webSocketStreamEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
-
+  } 
 }
 
 void WebServerInit() {
@@ -130,24 +97,21 @@ void WebServerInit() {
   // Websockets initialized
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
-  webSocketStream.begin();
-  webSocketStream.onEvent(webSocketStreamEvent);
   Serial.println("=== WebSocket Server initialized!=== ");  
 }
 
-void WebSocketBroadcastStream(){
+void WebSocketBroadcastStream(bool isDebugFrame){
   PacketData pkt;
-  while (xQueueReceive(frameSlicesQueue, &pkt, 0) == pdTRUE) {
+  if (xQueueReceive(frameSlicesQueue, &pkt, 0) == pdTRUE) {
 
     if (pkt.len >= sizeof(PacketHeader)) {
-      webSocketStream.broadcastBIN(pkt.data, pkt.len);
-      
-      PacketHeader* header = (PacketHeader*)pkt.data;
-      Serial.printf("[DEBUG after broadcast] frameId=%u, totalSize=%u, chunkId=%u/%u\n",
-                    header->frameId, header->totalSize, header->chunkId+1, header->totalChunks);
-    }
+      webSocket.broadcastBIN(pkt.data, pkt.len);
 
-    free(pkt.data); 
+      if (isDebugFrame){
+        PacketHeader* header = (PacketHeader*)pkt.data;
+        DebugPacketHeader(*header);
+      }
+    }
   }
 }
 

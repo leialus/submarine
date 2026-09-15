@@ -227,32 +227,190 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       color: #fff;
       text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
 	  width: 100%;
+	  max-height: 40px;
 	  padding: 2px;
 	  background: rgba(220, 220, 220, 0.4); 
       backdrop-filter: blur(10px); 
       -webkit-backdrop-filter: blur(10px);
+	  overflow: hidden;
+	  cursor: pointer;
+	  user-select: none;
+	  pointer-events: auto;
+	  transition: max-height 0.25s ease;
     }
+	
+	
+	.mensagem-text.expanded {
+	  max-height: 55vh;
+	  overflow-y: auto;
+	  cursor: pointer;
+	}
+
+	.msg-item {
+	  padding: 3px 0;
+	  border-bottom: 1px solid rgba(255,255,255,0.15);
+	  word-break: break-word;
+	}
+
+	.msg-item:last-child { border-bottom: none; }
+
   </style>
   <script>
-	  const host = location.hostname || "localhost";
+	const host = location.hostname || "localhost";
+
+    let displaying = false;
+    let stream = null;
 	
+	const logMessages = [];
+	const MAX_MENSAGES = 100;
+
+    const HEADER_SIZE = 16;
+    const ESP32_CHUNK_SIZE = 1384;
+    let framesCache = {}; 
+	
+	const BUTTON_MAP = {
+	  "up":     1,
+	  "down":   2,
+	  "left":   3,
+	  "right":  4,
+	  "a":      5,
+	  "b":      6,
+	  "x":      7,
+	  "y":      8,
+	  "start":  9,
+	  "select": 10
+	};
+
     const socket = new WebSocket("ws://" + host + ":81/");
-	
-    socket.onmessage = function(event) {
-      document.getElementById("mensagem").textContent = event.data;
+	socket.binaryType = "arraybuffer";
+
+	function escapeHtml(str) {
+	  const div = document.createElement("div");
+	  div.textContent = str;
+	  return div.innerHTML;
+	}
+
+	function renderMensagens() {
+	  const el = document.getElementById("mensagem");
+	  if (!el) return;
+
+	  if (el.classList.contains("expanded")) {
+		// expanded mode
+		el.innerHTML = logMessages
+		  .map(m => '<div class="msg-item">' + escapeHtml(m) + '</div>')
+		  .join("");
+		// Auto-scroll to the end
+		el.scrollTop = el.scrollHeight;
+	  } else {
+		// short mode, only last message
+		el.textContent = logMessages[logMessages.length - 1];
+	  }
+	}
+
+    function LogMessageEvent(data) {
+	  logMessages.push(data);
+	  if (logMessages.length > MAX_MENSAGES) logMessages.shift();
+	  renderMensagens();
+	}
+
+    function StreamEvent(data){
+      if (!stream) {
+        stream = document.getElementById("stream");
+      }
+      
+      if (data.byteLength < HEADER_SIZE) {
+          console.warn('too short package:', data.byteLength);
+          return;
+      }
+
+	    //header bytes
+      const header = new Uint32Array(data, 0, 4);
+      const frameId = header[0];
+      const totalSize = header[1];
+      const chunkId = header[2];
+      const totalChunks = header[3];
+	  
+	  //image bytes
+      const chunkData = new Uint8Array(data, HEADER_SIZE);
+	  
+      //dictionary with frame id as key and struct {total slices, current received, total image size}
+      if (!framesCache[frameId]) {
+        framesCache[frameId] = {
+          totalChunks: totalChunks,
+          chunksReceived: 0,
+          buffer: new Uint8Array(totalSize) //alocate total image size
+        };
+      }
+  
+	  const currentFrame = framesCache[frameId];
+  
+	  const offset = chunkId * ESP32_CHUNK_SIZE; 
+  
+	  currentFrame.buffer.set(chunkData, offset);
+      currentFrame.chunksReceived++;
+	  
+	    //if received all image slices
+      if (currentFrame.chunksReceived === currentFrame.totalChunks) {
+        // Cria o arquivo binário em memória
+        const blob = new Blob([currentFrame.buffer], { type: 'image/jpeg' });
+        const imageUrl = URL.createObjectURL(blob);
+        
+        //dispose current frame
+        URL.revokeObjectURL(stream.src);
+
+        //show new frame
+        stream.src = imageUrl;
+
+        //remove frame from dictionary
+        delete framesCache[frameId];
+        
+        //remove fron dictionary any other frame if his ID is lower than the current one
+        Object.keys(framesCache).forEach(id => {
+          if (parseInt(id) < frameId) {
+            delete framesCache[id];
+          }
+        });
+      }
+    }
+
+    socket.onmessage = (event) => {
+      typeof event.data === "string" ? LogMessageEvent(event.data) : StreamEvent(event.data);
     };
 	
     function sendCommand(command) {
       if (socket.readyState !== WebSocket.OPEN) {
-        console.error("WebSocket não conectado");
+        console.error("WebSocket not connected");
         return;
       }
       socket.send(JSON.stringify(command));
     }
 	
+	function SendAction(buttonName, actionName) {
+		
+	  //return btn in by name in BUTTON_MAP
+	  const buttonId = BUTTON_MAP[buttonName];
+	  if (!buttonId) {
+		console.error("This button does not exist in current buttons table:", buttonName);
+		return;
+	  }
+	  
+	  const actionState = (actionName === "press");
+
+	  const bufferEnvio = new Uint8Array(3);
+	  bufferEnvio[0] = 1; 						// typeMessage (uint8_t)
+	  bufferEnvio[1] = buttonId;            	// button (uint8_t)
+	  bufferEnvio[2] = actionState ? 1 : 0;  	// action (bool -> uint8_t)
+
+	  if (socket && socket.readyState === WebSocket.OPEN) {
+		socket.send(bufferEnvio);
+	  } else {
+		console.warn("WebSocket not connected.");
+	  }
+	}
+		
     function bindButton(el, name) {
-      const press   = () => sendCommand({ name, action: "press" });
-      const release = () => sendCommand({ name, action: "release" });
+      const press   = () => SendAction(name, "press");
+      const release = () => SendAction(name, "release");
 
       el.addEventListener("mousedown", press);
       el.addEventListener("mouseup", release);
@@ -275,84 +433,16 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       bindButton(document.getElementById("yBtn"),      "y");
       bindButton(document.getElementById("startBtn"),  "start");
       bindButton(document.getElementById("selectBtn"), "select");
-    };
-	
-    // ---- Video WebSocket (Port 82) ----
-    const streamSocket = new WebSocket("ws://" + host + ":82/");
-	streamSocket.binaryType = "arraybuffer";
-	
-    let displaying = false;
-    let stream = null;
-	
-	const HEADER_SIZE = 16;
-	const ESP32_CHUNK_SIZE = 1384;
-	let framesCache = {}; 
-		
-	streamSocket.onmessage = function(event) {
-      let data = event.data;
-
-		  console.log("size: " + data.byteLength);
-
-      if (!stream) {
-        stream = document.getElementById("stream");
-      }
-      
-
-      if (data.byteLength < HEADER_SIZE) {
-          console.warn('too short package:', data.byteLength);
-          return;
-      }
-
-	  //header bytes
-      const header = new Uint32Array(data, 0, 4);
-      const frameId = header[0];
-      const totalSize = header[1];
-      const chunkId = header[2];
-      const totalChunks = header[3];
 	  
-      console.log(`frameId, totalSize, chunkId/totalChunks`);
-    
-	  //image bytes
-      const chunkData = new Uint8Array(data, HEADER_SIZE);
-	  
-	  //dictionary with frame id as key and struct {total slices, current received, total image size}
-	  if (!framesCache[frameId]) {
-        framesCache[frameId] = {
-            totalChunks: totalChunks,
-            chunksReceived: 0,
-            buffer: new Uint8Array(totalSize) //alocate total image size
-        };
-      }
-	  
-	  const currentFrame = framesCache[frameId];
-	  
-	  const offset = chunkId * ESP32_CHUNK_SIZE; 
-	  
-	  currentFrame.buffer.set(chunkData, offset);
-      currentFrame.chunksReceived++;
-	  
-	  //if received all image slices
-	  if (currentFrame.chunksReceived === currentFrame.totalChunks) {
-        // Cria o arquivo binário em memória
-        const blob = new Blob([currentFrame.buffer], { type: 'image/jpeg' });
-        const imageUrl = URL.createObjectURL(blob);
-        
-		//dispose current frame
-        URL.revokeObjectURL(stream.src);
+	  // message log toggle
+	  const elMsg = document.getElementById("mensagem");
+	  elMsg.addEventListener("click", () => {
+		elMsg.classList.toggle("expanded");
+		renderMensagens();
+	  });
 
-        //show new frame
-        stream.src = imageUrl;
-
-        //remove frame from dictionary
-        delete framesCache[frameId];
-        
-        //remove fron dictionary any other frame if his ID is lower than the current one
-        Object.keys(framesCache).forEach(id => {
-		  if (parseInt(id) < frameId) {
-		 	delete framesCache[id];
-		  }
-        });
-      }
+	  logMessages.push("Aguardando mensagens...");
+	  renderMensagens();
     };
 	
   </script>
@@ -365,7 +455,6 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 	
   <div class="controller-wrapper">
   
-	<div id="mensagem" class="mensagem-text">Aguardando mensagem...</div>
 	
     <div class="controller">
       <div class="controller-inner">
@@ -416,8 +505,9 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       </div>
 	  
 	</div>
+	<div id="mensagem" class="mensagem-text">Aguardando mensagem...</div>
+	
   </div>
 </body>
 </html>
-
 )rawliteral";

@@ -1,12 +1,22 @@
 //ESP32-S3 CAM
 
+#include "MyAction.h"
 #include "sensor.h"
 #include "CameraStream.h"
 #include "UDPConnection.h"
 
+ActionPackage currentActionPackage(0, 0, false);
+volatile bool newAction = false; 
+
 void onEvent(arduino_event_id_t event) {
   Serial.print("Evento Ethernet: ");
   Serial.println(event);
+}
+
+//Received action ballback
+void HanddlerCommands(const ActionPackage& actionPackage){
+  currentActionPackage = actionPackage;
+  newAction = true;
 }
 
 void setup() {
@@ -26,6 +36,7 @@ void setup() {
 
   //UDP connection
   UDPInit();
+  MyUDPConnectionCallbacks(HanddlerCommands);
 
   //create async task to send frames slices
   xTaskCreatePinnedToCore(FrameSplit, "FrameSplit", 8192, NULL, 3, NULL, 1);
@@ -49,5 +60,18 @@ void loop() {
       ESP.getMinFreePsram(),
       temperatureRead()
     );
+
+    String telemetry = "#Submarine: ";
+    telemetry += String(temperatureRead());
+    
+    UDPSenderTelemetry(telemetry);
   }
+
+  UDPReceiver(); 
+  
+  if (newAction) {
+    //DO SOMETHING
+  } 
+
+  delay(10);
 }

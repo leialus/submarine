@@ -3,9 +3,11 @@
 
 QueueHandle_t frameSlicesQueue;
 
-#define QUEUE_SIZE 10
+const size_t CHUNK_DATA_SIZE = 1400;
+
+#define QUEUE_SIZE 6
 struct PacketData {
-    uint8_t* data;
+    uint8_t data[CHUNK_DATA_SIZE];
     size_t len;
 };
 

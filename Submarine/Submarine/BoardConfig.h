@@ -53,12 +53,12 @@ camera_config_t CameraConfig(){
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 25000000; //25000000 | 20000000 | 10000000 | 8000000 | 6000000
-  config.frame_size = FRAMESIZE_320X320; //FRAMESIZE_240X240 | FRAMESIZE_QQVGA
+  config.frame_size = FRAMESIZE_QVGA; //FRAMESIZE_VGA | FRAMESIZE_QVGA | FRAMESIZE_240X240 | FRAMESIZE_QQVGA
   config.pixel_format = PIXFORMAT_JPEG; //streming
   config.grab_mode = CAMERA_GRAB_LATEST; //CAMERA_GRAB_WHEN_EMPTY | CAMERA_GRAB_LATEST
   config.fb_location = CAMERA_FB_IN_PSRAM; // CAMERA_FB_IN_DRAM | CAMERA_FB_IN_PSRAM
-  config.jpeg_quality = 20; //0-63, for OV series camera sensors, lower number means higher quality
-  config.fb_count = 1;
+  config.jpeg_quality = 8; //0-63, for OV series camera sensors, lower number means higher quality
+  config.fb_count = 2;
   return config;
 }
 
