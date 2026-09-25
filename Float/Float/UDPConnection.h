@@ -104,12 +104,12 @@ void UDPReceiver() {
 
           } else {
             Serial.print("UDP package size does not match: ");
-            Serial.println(packetSize);
+            Serial.println(pkt.len);
           }
 
         } else if (protType == PROT_VIDEO) {
           //if packet is correct and have some data
-          if (packetSize > sizeof(FrameProt)) {
+          if (pkt.len > sizeof(FrameProt)) {
             if (onToQueueSlice != nullptr) {
               //FrameProt* prot = (FrameProt*)pkt.data;
               //DebugPacketHeader(*prot);
@@ -117,7 +117,7 @@ void UDPReceiver() {
             }
           } else {
             Serial.print("UDP package size does not match: ");
-            Serial.println(packetSize);
+            Serial.println(pkt.len);
           }
         } else {
           Serial.println("Unknown UDP protocol: ");
@@ -128,43 +128,6 @@ void UDPReceiver() {
 
     vTaskDelay(pdMS_TO_TICKS(1));
   }
-
-
-/*
-  uint8_t buffer[2048];
-
-  while (true) {
-    int packetSize = Udp.parsePacket();
-    if (packetSize) {
-      int len = Udp.read(buffer, sizeof(buffer));
-
-      if (buffer[0] == '#') {
-        //telemetry message
-
-        int textSize = (len < sizeof(buffer)) ? len : sizeof(buffer) - 1;
-        buffer[textSize] = '\0'; 
-
-        String stringRecebida = String((char*)buffer);
-
-        if (onToWebSendTelemetry != nullptr){
-          onToWebSendTelemetry(stringRecebida);
-        }
-
-      }else if (len >= sizeof(FrameProt)) {
-        //frame data
-        if (onToQueueSlice != nullptr) {
-          //FrameProt* prot = (FrameProt*)buffer;
-          //DebugPacketHeader(*header);
-          onToQueueSlice(buffer, len);
-        }
-
-      } else {
-        Serial.println("Header is too short or incomplete");
-      }
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(1));
-  }*/
 }
 
 #endif

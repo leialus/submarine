@@ -366,6 +366,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
           framesCache[frameId] = {
             totalChunks: totalChunks,
             chunksReceived: 0,
+			receivedChunks: new Uint8Array(totalChunks),
             buffer: new Uint8Array(totalSize) //alocate total image size
           };
         }
@@ -375,9 +376,12 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 	    const offset = chunkId * ESP32_CHUNK_VIDEO_SIZE; 
 	    
 	    currentFrame.buffer.set(chunkData, offset);
-        currentFrame.chunksReceived++;
-	    
-	      //if received all image slices
+        if (!currentFrame.receivedChunks[chunkId]) {
+		  currentFrame.receivedChunks[chunkId] = 1;
+		  currentFrame.chunksReceived++;
+		}
+				
+	    //if received all image slices
         if (currentFrame.chunksReceived === currentFrame.totalChunks) {
           // Cria o arquivo binário em memória
           const blob = new Blob([currentFrame.buffer], { type: 'image/jpeg' });
@@ -543,7 +547,5 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   </div>
 </body>
 </html>
-
-
 
 )rawliteral";
