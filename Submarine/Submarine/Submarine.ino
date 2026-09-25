@@ -1,12 +1,12 @@
 //ESP32-S3 CAM
 
 #include <WiFi.h>
-#include "MyAction.h"
+#include "ComProtocols.h"
 #include "sensor.h"
 #include "CameraStream.h"
 #include "UDPConnection.h"
 
-ActionPackage currentActionPackage(0, 0, false);
+ActionProt currentActionProt(0, false);
 volatile bool newAction = false; 
 
 void onEvent(arduino_event_id_t event) {
@@ -15,8 +15,8 @@ void onEvent(arduino_event_id_t event) {
 }
 
 //Received action ballback
-void HanddlerCommands(const ActionPackage& actionPackage){
-  currentActionPackage = actionPackage;
+void HanddlerCommands(const ActionProt& prot){
+  currentActionProt = prot;
   newAction = true;
 }
 
@@ -45,8 +45,8 @@ void setup() {
 }
 
 //calback to send UDP images slices
-void ToSendFrameSlice(const PacketHeader& header, const uint8_t* data, size_t data_len) {
-  sendFrameSlice(header, data, data_len);
+void ToSendFrameSlice(const FrameProt& prot, const uint8_t* data, size_t data_len) {
+  sendFrameSlice(prot, data, data_len);
 }
 
 void loop() {

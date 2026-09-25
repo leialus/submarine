@@ -5,7 +5,6 @@
 #include <EthernetESP32.h>
 #include <EthernetUdp.h>
 #include "BoardConfig.h"
-#include "FrameHanddler.h"
 
 byte myMacAddress[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x01 };
 IPAddress localIP(192, 168, 1, 10);
@@ -20,11 +19,11 @@ EthernetUDP Udp;
 const int UDPPort = 8888;
 
 inline void (*onToQueueSlice)(const uint8_t* data, size_t len) = nullptr;
-inline void (*onToWebSendTelemetry)(const String&) = nullptr;
+inline void (*onToWebSendTelemetry)(UDPPkt pkt) = nullptr;
 
-void UDPConnectionCallback(void (*ToQueueSlice)(const uint8_t* data, size_t len), void (*ToWebSendMessageCallback)(const String&)) {
+void UDPConnectionCallback(void (*ToQueueSlice)(const uint8_t* data, size_t len), void (*ToWebSendTelemetryCallback)(UDPPkt pkt)) {
   onToQueueSlice = ToQueueSlice;
-  onToWebSendTelemetry = ToWebSendMessageCallback;
+  onToWebSendTelemetry = ToWebSendTelemetryCallback;
 }
 
 void UDPInit()
@@ -77,38 +76,61 @@ void UDPInit()
   Serial.println("===  Ethernet and UDP connected ===");
 }
 
-void UDPReceiver(){
-  int packetSize = Udp.parsePacket();
-  if (packetSize) {
-    // Lê a mensagem
-    char buffer[255];
-    int len = Udp.read(buffer, 255);
-    if (len > 0) {
-      buffer[len] = 0;
-      Serial.print("Recebido de ");
-      Serial.print(Udp.remoteIP());
-      Serial.print(":");
-      Serial.print(Udp.remotePort());
-      Serial.print(" -> ");
-      Serial.println(buffer);
-    }
-
-    //// to send an answer
-    // Udp.beginPacket(Udp.remoteIP(), Udp.remotePort);
-    // Udp.print("Mensagem recebida do submarine!");
-    // Udp.endPacket();
-    // Serial.println("Resposta enviada.");
-  }
-
-}
-
-void UDPSenderComand(const ActionPackage& actionPackage) {
+void UDPSenderComand(const ActionProt& actionProt) {
   Udp.beginPacket(targetIP, UDPPort);
-  Udp.write((uint8_t*)&actionPackage, sizeof(actionPackage));
+  Udp.write((uint8_t*)&actionProt, sizeof(actionProt));
   Udp.endPacket();
 }
 
-void UDPReceptFrameSlice() {
+void UDPReceiver() {
+  
+  while (true) {
+    int packetSize = Udp.parsePacket();
+    if (packetSize > 0) {
+      UDPPkt pkt;
+    
+      pkt.len = Udp.read(pkt.data, sizeof(pkt.data));
+
+      if (pkt.len > 0) {
+        uint8_t protType = pkt.data[0];
+
+        if (protType == PROT_TELEMETRY) {
+          //if packet is correct and have some data
+          if (pkt.len > sizeof(TelemetryProt)) {
+          
+            if (onToWebSendTelemetry != nullptr){
+              onToWebSendTelemetry(pkt);
+            }
+
+          } else {
+            Serial.print("UDP package size does not match: ");
+            Serial.println(packetSize);
+          }
+
+        } else if (protType == PROT_VIDEO) {
+          //if packet is correct and have some data
+          if (packetSize > sizeof(FrameProt)) {
+            if (onToQueueSlice != nullptr) {
+              //FrameProt* prot = (FrameProt*)pkt.data;
+              //DebugPacketHeader(*prot);
+              onToQueueSlice(pkt.data, pkt.len);
+            }
+          } else {
+            Serial.print("UDP package size does not match: ");
+            Serial.println(packetSize);
+          }
+        } else {
+          Serial.println("Unknown UDP protocol: ");
+          Serial.print(protType);
+        }
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+
+
+/*
   uint8_t buffer[2048];
 
   while (true) {
@@ -128,11 +150,10 @@ void UDPReceptFrameSlice() {
           onToWebSendTelemetry(stringRecebida);
         }
 
-      }else if (len >= sizeof(PacketHeader)) {
-        //flame data
-        PacketHeader* header = (PacketHeader*)buffer;
-        
+      }else if (len >= sizeof(FrameProt)) {
+        //frame data
         if (onToQueueSlice != nullptr) {
+          //FrameProt* prot = (FrameProt*)buffer;
           //DebugPacketHeader(*header);
           onToQueueSlice(buffer, len);
         }
@@ -143,7 +164,7 @@ void UDPReceptFrameSlice() {
     }
 
     vTaskDelay(pdMS_TO_TICKS(1));
-  }
+  }*/
 }
 
 #endif

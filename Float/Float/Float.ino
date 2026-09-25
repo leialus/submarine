@@ -1,11 +1,11 @@
 /*
 pinos esp32s3
 */
-#include "Action.h"
+#include "ComProtocols.h"
 #include "MyWebServer.h"
 #include "UDPConnection.h"
 
-String telemetry = "";
+UDPPkt telemetryPkt;
 
 void onEvent(arduino_event_id_t event) {
   Serial.print("Evento Ethernet: ");
@@ -13,19 +13,19 @@ void onEvent(arduino_event_id_t event) {
 }
 
 //Received action ballback
-void HanddlerCommands(const ActionPackage& actionPackage){
+void HanddlerCommands(const ActionProt& actionProt){
   
-  //if this comand is suposed to run only fror 
-  if (actionPackage.typeMessage == 0) return;
+  //if this comand is suposed to run only on Float 
+  if (actionProt.protType != PROT_ACTION) return;
 
   //send command to submarine using Udp
-  UDPSenderComand(actionPackage);
+  UDPSenderComand(actionProt);
 }
 
 //callback to populate telemetry from Submarine
 //We need to do it cuz UDP task is async, if we try send to websockets we get Cache error
-void HanddleTelemetryMessage(const String& myMessage){
-  telemetry = myMessage;
+void HanddleTelemetryMessage(UDPPkt pkt){
+  telemetryPkt = pkt;
 }
 
 //Message callback to send by websocket
@@ -39,21 +39,16 @@ void WebsocketLog(const String& myMessage){
 }
 
 void TaskReceptorUDP(void *pvParameters) {
-  UDPReceptFrameSlice();
+  UDPReceiver();
 }
 
 void AddQueueSlices(const uint8_t* data, size_t len) {
-    if (len > CHUNK_DATA_SIZE) {
-      Serial.println("data is too big");
-      return;
-    }
-
-    static PacketData pkt;
+    static UDPPkt pkt;
     pkt.len = len;
      // copy data to struct
     memcpy(pkt.data, data, len);
 
-    // tryb and add to queue
+    // try and add to queue
     if (xQueueSend(frameSlicesQueue, &pkt, 0) != pdTRUE) {
         Serial.println("queue is full drop package");
     }
@@ -78,7 +73,7 @@ void setup() {
   //UDP connection
   UDPInit();
   UDPConnectionCallback(AddQueueSlices, HanddleTelemetryMessage);
-  xTaskCreatePinnedToCore(TaskReceptorUDP, "ReceptorUDP", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(TaskReceptorUDP, "ReceptorUDP", 6144, NULL, 1, NULL, 1);
 }
 
 void loop() {
@@ -98,19 +93,17 @@ void loop() {
       temperatureRead()
     );
 
-    if (telemetry.length() > 5){
-      //send Submarine Telemetry
-      WebsocketLog(telemetry);
+    //send Submarine Telemetry
+    WebSocketBroadcastPack(telemetryPkt);
+    telemetryPkt.len = 0;
 
-      //send Float Telemetry
-      String telemetry = "#Float: ";
-      telemetry += String(temperatureRead());
-      WebsocketLog(telemetry);
+    //send Float Telemetry
+    String telemetry = "#Float: ";
+    telemetry += String(temperatureRead());
+    WebSocketBroadcastTelemetry(telemetry);
 
-      telemetry = "";
-    }
+    telemetry = "";
   }
-
 
   // WebSocket
   webSocket.loop();
@@ -119,7 +112,6 @@ void loop() {
   server.handleClient();
 
   WebSocketBroadcastStream(isDebugFrame);
-
 
   isDebugFrame = false;
 

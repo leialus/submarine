@@ -4,6 +4,7 @@
 
 const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -220,8 +221,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     .btn-a:active { box-shadow: 0 1px 0 #8b0000, 0 2px 4px rgba(0, 0, 0, 0.3); }
     .btn-b:active { box-shadow: 0 1px 0 #b7950b, 0 2px 4px rgba(0, 0, 0, 0.3); }
 	
-    /* ---- Texto de Mensagem Flutuante ---- */
-    .mensagem-text {
+    .message-text {
       position: absolute;
       font-size: 11px;
       color: #fff;
@@ -240,7 +240,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     }
 	
 	
-	.mensagem-text.expanded {
+	.message-text.expanded {
 	  max-height: 55vh;
 	  overflow-y: auto;
 	  cursor: pointer;
@@ -264,10 +264,16 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 	const logMessages = [];
 	const MAX_MENSAGES = 100;
 
-    const HEADER_SIZE = 16;
-    const ESP32_CHUNK_SIZE = 1384;
+    const HEADER_VIDEO_SIZE = 20;
+    const ESP32_CHUNK_VIDEO_SIZE = 1380;
     let framesCache = {}; 
 	
+	const ProtType = {
+		VIDEO: 0x01,
+		ACTION: 0x02,
+		TELEMETRY: 0x03
+	};
+
 	const BUTTON_MAP = {
 	  "up":     1,
 	  "down":   2,
@@ -296,8 +302,8 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 	  return div.innerHTML;
 	}
 
-	function renderMensagens() {
-	  const el = document.getElementById("mensagem");
+	function renderMessages() {
+	  const el = document.getElementById("message");
 	  if (!el) return;
 
 	  if (el.classList.contains("expanded")) {
@@ -316,71 +322,92 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     function LogMessageEvent(data) {
 	  logMessages.push("[" + currentTime() + "] " + data);
 	  if (logMessages.length > MAX_MENSAGES) logMessages.shift();
-	  renderMensagens();
+	  renderMessages();
 	}
 
-    function StreamEvent(data){
-      if (!stream) {
-        stream = document.getElementById("stream");
-      }
-      
-      if (data.byteLength < HEADER_SIZE) {
-          console.warn('too short package:', data.byteLength);
-          return;
-      }
-
-	    //header bytes
-      const header = new Uint32Array(data, 0, 4);
-      const frameId = header[0];
-      const totalSize = header[1];
-      const chunkId = header[2];
-      const totalChunks = header[3];
+    function BinEvent(data){
+	
+	  const binBites = new Uint8Array(data, 0, 1);
+	  const protId = binBites[0];
 	  
-	  //image bytes
-      const chunkData = new Uint8Array(data, HEADER_SIZE);
+	  if (protId === ProtType.TELEMETRY) {
+		const telemetryBytes = new Uint8Array(data);
+		const telemetryText = telemetryBytes.slice(1);
+		
+        const telemetry = new TextDecoder().decode(telemetryText);
+		
+		LogMessageEvent(telemetry)
+		
+		return;
+	  }
 	  
-      //dictionary with frame id as key and struct {total slices, current received, total image size}
-      if (!framesCache[frameId]) {
-        framesCache[frameId] = {
-          totalChunks: totalChunks,
-          chunksReceived: 0,
-          buffer: new Uint8Array(totalSize) //alocate total image size
-        };
-      }
-  
-	  const currentFrame = framesCache[frameId];
-  
-	  const offset = chunkId * ESP32_CHUNK_SIZE; 
-  
-	  currentFrame.buffer.set(chunkData, offset);
-      currentFrame.chunksReceived++;
+	  if (protId == ProtType.VIDEO){		
+        if (!stream) {
+          stream = document.getElementById("stream");
+        }
+	    
+        if (data.byteLength < HEADER_VIDEO_SIZE) {
+            console.warn('too short package:', data.byteLength);
+            return;
+        }
+	    
+		//header bytes
+		const bytes = new Uint8Array(data);
+		const frameId = new DataView(data).getUint32(4, true);
+		const totalSize = new DataView(data).getUint32(8, true);
+		const chunkId = new DataView(data).getUint32(12, true);
+		const totalChunks = new DataView(data).getUint32(16, true);
+		
+	    //image bytes
+        const chunkData = new Uint8Array(data, HEADER_VIDEO_SIZE);
+	    
+        //dictionary with frame id as key and struct {total slices, current received, total image size}
+        if (!framesCache[frameId]) {
+          framesCache[frameId] = {
+            totalChunks: totalChunks,
+            chunksReceived: 0,
+            buffer: new Uint8Array(totalSize) //alocate total image size
+          };
+        }
+	    
+	    const currentFrame = framesCache[frameId];
+	    
+	    const offset = chunkId * ESP32_CHUNK_VIDEO_SIZE; 
+	    
+	    currentFrame.buffer.set(chunkData, offset);
+        currentFrame.chunksReceived++;
+	    
+	      //if received all image slices
+        if (currentFrame.chunksReceived === currentFrame.totalChunks) {
+          // Cria o arquivo binário em memória
+          const blob = new Blob([currentFrame.buffer], { type: 'image/jpeg' });
+          const imageUrl = URL.createObjectURL(blob);
+          
+          //dispose current frame
+          URL.revokeObjectURL(stream.src);
+	    
+          //show new frame
+          stream.src = imageUrl;
+	    
+          //remove frame from dictionary
+          delete framesCache[frameId];
+          
+          //remove fron dictionary any other frame if his ID is lower than the current one
+          Object.keys(framesCache).forEach(id => {
+            if (parseInt(id) < frameId) {
+              delete framesCache[id];
+            }
+          });
+        }
+		
+		return;
+	  }
 	  
-	    //if received all image slices
-      if (currentFrame.chunksReceived === currentFrame.totalChunks) {
-        // Cria o arquivo binário em memória
-        const blob = new Blob([currentFrame.buffer], { type: 'image/jpeg' });
-        const imageUrl = URL.createObjectURL(blob);
-        
-        //dispose current frame
-        URL.revokeObjectURL(stream.src);
-
-        //show new frame
-        stream.src = imageUrl;
-
-        //remove frame from dictionary
-        delete framesCache[frameId];
-        
-        //remove fron dictionary any other frame if his ID is lower than the current one
-        Object.keys(framesCache).forEach(id => {
-          if (parseInt(id) < frameId) {
-            delete framesCache[id];
-          }
-        });
-      }
+	  LogMessageEvent("NONE");
     }
 
     socket.onmessage = (event) => {
-      typeof event.data === "string" ? LogMessageEvent(event.data) : StreamEvent(event.data);
+      typeof event.data === "string" ? LogMessageEvent(event.data) : BinEvent(event.data);
     };
 	
     function sendCommand(command) {
@@ -403,7 +430,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 	  const actionState = (actionName === "press");
 
 	  const bufferEnvio = new Uint8Array(3);
-	  bufferEnvio[0] = 1; 						// typeMessage (uint8_t)
+	  bufferEnvio[0] = ProtType.ACTION; 		// typeMessage (uint8_t)
 	  bufferEnvio[1] = buttonId;            	// button (uint8_t)
 	  bufferEnvio[2] = actionState ? 1 : 0;  	// action (bool -> uint8_t)
 
@@ -441,14 +468,14 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       bindButton(document.getElementById("selectBtn"), "select");
 	  
 	  // message log toggle
-	  const elMsg = document.getElementById("mensagem");
+	  const elMsg = document.getElementById("message");
 	  elMsg.addEventListener("click", () => {
 		elMsg.classList.toggle("expanded");
-		renderMensagens();
+		renderMessages();
 	  });
 
 	  logMessages.push("[" + currentTime() + "] Aguardando mensagens...");
-	  renderMensagens();
+	  renderMessages();
     };
 	
   </script>
@@ -511,10 +538,12 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       </div>
 	  
 	</div>
-	<div id="mensagem" class="mensagem-text">Aguardando mensagem...</div>
+	<div id="message" class="message-text">Aguardando mensagem...</div>
 	
   </div>
 </body>
 </html>
+
+
 
 )rawliteral";

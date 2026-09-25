@@ -6,12 +6,14 @@
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
 #include "Webpage.h"
-#include "FrameHanddler.h"
+
+#define QUEUE_SIZE 6
+QueueHandle_t frameSlicesQueue;
 
 inline void (*onToWebSendMessage)(const String&) = nullptr;
-inline void (*onActionUpdate)(const ActionPackage&) = nullptr;
+inline void (*onActionUpdate)(const ActionProt&) = nullptr;
 
-void MyWebServerCallbacks(void (*ToWebSendMessageCallback)(const String&), void (*ActionCallback)(const ActionPackage&)) {
+void MyWebServerCallbacks(void (*ToWebSendMessageCallback)(const String&), void (*ActionCallback)(const ActionProt&)) {
   onToWebSendMessage = ToWebSendMessageCallback;
   onActionUpdate = ActionCallback;
 }
@@ -29,32 +31,34 @@ void handleRoot() {
   server.send_P(200, "text/html", WEBPAGE_HTML);
 }
 
-void handleButton(ActionPackage actionPackage) {
-  String message = (actionPackage.typeMessage == 0) ? "to Float: " : "to submarine: ";
-  message += String(actionPackage.button);
-  message += actionPackage.action ? " PRESSED" : " RELEASED";
+void handleButton(ActionProt actionProt) {
+  String message = (actionProt.protType == 0) ? "to Float: " : "to submarine: ";
+  message += String(actionProt.button);
+  message += actionProt.action ? " PRESSED" : " RELEASED";
 
   if (onToWebSendMessage) {
     onToWebSendMessage(message);
   }
 
   if (onActionUpdate) {
-    onActionUpdate(actionPackage);
+    onActionUpdate(actionProt);
   }
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
   if (type == WStype_BIN) {
-    if (length == sizeof(ActionPackage)) {
-      ActionPackage actionPackage(0, 0, 0);
+    if (length == sizeof(ActionProt)) {
+      ActionProt actionProt(0, 0);
 
-      memcpy(&actionPackage, payload, sizeof(ActionPackage));
+      memcpy(&actionProt, payload, sizeof(ActionProt));
       
-      handleButton(actionPackage); 
+      handleButton(actionProt); 
     } else {
       Serial.println("Err: Tinvalid package size.");
     }
   } else if (type == WStype_TEXT) {
+    //e.g
+    /*
     String mensagem = String((char*)payload);
 
     StaticJsonDocument<200> doc;
@@ -71,11 +75,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 
     //Do something
     return;
+    */
   } 
 }
 
 void WebServerInit() {
-  frameSlicesQueue = xQueueCreate(QUEUE_SIZE, sizeof(PacketData));
+  frameSlicesQueue = xQueueCreate(QUEUE_SIZE, sizeof(UDPPkt));
 
   Serial.println("=== WiFi initializing... ===");
   WiFi.softAP(ssid, password);
@@ -100,16 +105,22 @@ void WebServerInit() {
   Serial.println("=== WebSocket Server initialized!=== ");  
 }
 
+void WebSocketBroadcastPack(UDPPkt pkt){
+    if(pkt.len > 0){
+      webSocket.broadcastBIN(pkt.data, pkt.len);
+    }
+}
+
 void WebSocketBroadcastStream(bool isDebugFrame){
-  PacketData pkt;
+  UDPPkt pkt;
   if (xQueueReceive(frameSlicesQueue, &pkt, 0) == pdTRUE) {
 
-    if (pkt.len >= sizeof(PacketHeader)) {
-      webSocket.broadcastBIN(pkt.data, pkt.len);
+    if (pkt.len >= sizeof(FrameProt)) {
+      WebSocketBroadcastPack(pkt);
 
       if (isDebugFrame){
-        PacketHeader* header = (PacketHeader*)pkt.data;
-        DebugPacketHeader(*header);
+        FrameProt* prot = (FrameProt*)pkt.data;
+        DebugPacketHeader(*prot);
       }
     }
   }
@@ -117,6 +128,20 @@ void WebSocketBroadcastStream(bool isDebugFrame){
 
 void WebSocketBroadcastMessage(String message){
   webSocket.broadcastTXT(message);
+}
+
+void WebSocketBroadcastTelemetry(String telemetry){
+  if (telemetry.length() < 5) return;
+
+  TelemetryProt prot;
+  UDPPkt pkt;
+
+  pkt.len = sizeof(prot) + telemetry.length();
+
+  memcpy(pkt.data, &prot, sizeof(prot));
+  memcpy(pkt.data + sizeof(prot), telemetry.c_str(), telemetry.length());
+  
+  WebSocketBroadcastPack(pkt);
 }
 
 #endif

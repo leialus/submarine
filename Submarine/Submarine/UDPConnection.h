@@ -18,14 +18,13 @@ EthernetUDP Udp;
 
 const int UDPPort = 8888;
 
-inline void (*onActionUpdate)(const ActionPackage&) = nullptr;
+inline void (*onActionUpdate)(const ActionProt&) = nullptr;
 
-void MyUDPConnectionCallbacks(void (*ActionCallback)(const ActionPackage&)) {
+void MyUDPConnectionCallbacks(void (*ActionCallback)(const ActionProt&)) {
   onActionUpdate = ActionCallback;
 }
 
-void UDPInit()
-{
+void UDPInit() {
   Serial.println();
   Serial.println("===  W5500 initializing... ===");
 
@@ -41,7 +40,7 @@ void UDPInit()
 
   // Set ethernet driver on ethernet class
   Ethernet.init(driver);
-  
+
   Serial.println("===  Ethernet and UDP connecting... ===");
 
   // initialize static IP ethernet
@@ -68,48 +67,61 @@ void UDPInit()
     Serial.println(Ethernet.localIP());
   } else {
     Serial.println("Fail to inicialize UDP.");
-    while (1);
+    while (1)
+      ;
   }
 
   Serial.println("===  Ethernet and UDP connected ===");
 }
 
-void UDPReceiver(){
+void UDPReceiver() {
   int packetSize = Udp.parsePacket();
   if (packetSize > 0) {
-    ActionPackage actionPackage(0, 0, false);
+    uint8_t protType;
 
-    if (packetSize == sizeof(ActionPackage)) {
-      
-      Udp.read((char*)&actionPackage, sizeof(ActionPackage));
-      if (onActionUpdate != nullptr){
-        onActionUpdate(actionPackage);
+    // First byte
+    Udp.read(&protType, sizeof(protType));
+
+    if (protType == PROT_ACTION) {
+      if (packetSize == sizeof(ActionProt)) {
+        ActionProt actionProt(0, false);
+
+        Udp.read(&actionProt.button, sizeof(actionProt.button));
+        Udp.read(&actionProt.action, sizeof(actionProt.action));
+        if (onActionUpdate != nullptr) {
+          onActionUpdate(actionProt);
+        }
+
+      } else {
+        Serial.print("UDP package size does not match: ");
+        Serial.println(packetSize);
       }
-
     } else {
-      Serial.print("UDP package size does not match: ");
-      Serial.println(packetSize);
+      Serial.println("Unknown UDP protocol: ");
+      Serial.print(protType);
     }
-
     //// to send an answer
-    // Udp.beginPacket(Udp.remoteIP(), Udp.remotePort);
+    // Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
     // Udp.print("Mensagem recebida do submarine!");
     // Udp.endPacket();
     // Serial.println("Resposta enviada.");
   }
-
 }
 
-void UDPSenderTelemetry(String telemetry){
+void UDPSenderTelemetry(String telemetry) {
   if (telemetry.length() < 5) return;
+
+  TelemetryProt telemetryProt;
+
   Udp.beginPacket(targetIP, UDPPort);
-  Udp.print(telemetry);
+  Udp.write((uint8_t*)&telemetryProt, sizeof(TelemetryProt));
+  Udp.write((const uint8_t*)telemetry.c_str(), telemetry.length());
   Udp.endPacket();
 }
 
-void sendFrameSlice(const PacketHeader& header, const uint8_t* data, size_t data_len) {
+void sendFrameSlice(const FrameProt& prot, const uint8_t* data, size_t data_len) {
   Udp.beginPacket(targetIP, UDPPort);
-  Udp.write((uint8_t*)&header, sizeof(header));
+  Udp.write((uint8_t*)&prot, sizeof(prot));
   Udp.write(data, data_len);
   Udp.endPacket();
 }
