@@ -4,7 +4,8 @@
 enum ProtType : uint8_t {
     PROT_VIDEO = 0x01,
     PROT_ACTION = 0x02,
-    PROT_TELEMETRY = 0x03
+    PROT_TELEMETRY = 0x03,
+    PROT_HARTBEAT = 0x04
 };
 
 struct FrameProt {

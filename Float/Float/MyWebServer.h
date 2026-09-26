@@ -112,6 +112,8 @@ void WebSocketBroadcastPack(UDPPkt pkt){
 }
 
 void WebSocketBroadcastStream(bool isDebugFrame){
+  if (!isSubmarineOnline) return;
+
   UDPPkt pkt;
   if (xQueueReceive(frameSlicesQueue, &pkt, 0) == pdTRUE) {
 

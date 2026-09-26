@@ -82,6 +82,13 @@ void UDPSenderComand(const ActionProt& actionProt) {
   Udp.endPacket();
 }
 
+void UDPSenderHarthbeat() {
+
+  Udp.beginPacket(targetIP, UDPPort);
+  Udp.write((uint8_t)PROT_HARTBEAT);
+  Udp.endPacket();
+}
+
 void UDPReceiver() {
   
   while (true) {

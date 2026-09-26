@@ -19,9 +19,11 @@ EthernetUDP Udp;
 const int UDPPort = 8888;
 
 inline void (*onActionUpdate)(const ActionProt&) = nullptr;
+inline void (*onHarthbeatUpdate)(void) = nullptr;
 
-void MyUDPConnectionCallbacks(void (*ActionCallback)(const ActionProt&)) {
+void MyUDPConnectionCallbacks(void (*ActionCallback)(const ActionProt&), void (*HarthbeatCallback)(void)) {
   onActionUpdate = ActionCallback;
+  onHarthbeatUpdate = HarthbeatCallback;
 }
 
 void UDPInit() {
@@ -67,8 +69,7 @@ void UDPInit() {
     Serial.println(Ethernet.localIP());
   } else {
     Serial.println("Fail to inicialize UDP.");
-    while (1)
-      ;
+    while (1);
   }
 
   Serial.println("===  Ethernet and UDP connected ===");
@@ -82,7 +83,11 @@ void UDPReceiver() {
     // First byte
     Udp.read(&protType, sizeof(protType));
 
-    if (protType == PROT_ACTION) {
+    if (protType == PROT_HARTBEAT) {
+      if (onHarthbeatUpdate != nullptr) {
+        onHarthbeatUpdate();
+      }
+    } else if (protType == PROT_ACTION) {
       if (packetSize == sizeof(ActionProt)) {
         ActionProt actionProt(0, false);
 
@@ -109,6 +114,7 @@ void UDPReceiver() {
 }
 
 void UDPSenderTelemetry(String telemetry) {
+  if (!isConnectedToFloat) return;
   if (telemetry.length() < 5) return;
 
   TelemetryProt telemetryProt;
@@ -120,6 +126,7 @@ void UDPSenderTelemetry(String telemetry) {
 }
 
 void sendFrameSlice(const FrameProt& prot, const uint8_t* data, size_t data_len) {
+  if (!isConnectedToFloat) return;
   Udp.beginPacket(targetIP, UDPPort);
   Udp.write((uint8_t*)&prot, sizeof(prot));
   Udp.write(data, data_len);

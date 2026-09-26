@@ -1,11 +1,13 @@
 /*
 pinos esp32s3
 */
+#include "GlobalVars.h"
 #include "ComProtocols.h"
 #include "MyWebServer.h"
 #include "UDPConnection.h"
 
 UDPPkt telemetryPkt;
+static unsigned long lastSubmarineTelemetry = 0;
 
 void onEvent(arduino_event_id_t event) {
   Serial.print("Evento Ethernet: ");
@@ -16,7 +18,7 @@ void onEvent(arduino_event_id_t event) {
 void HanddlerCommands(const ActionProt& actionProt){
   
   //if this comand is suposed to run only on Float 
-  if (actionProt.protType != PROT_ACTION) return;
+  if (actionProt.protType != PROT_ACTION || !isSubmarineOnline) return;
 
   //send command to submarine using Udp
   UDPSenderComand(actionProt);
@@ -26,6 +28,8 @@ void HanddlerCommands(const ActionProt& actionProt){
 //We need to do it cuz UDP task is async, if we try send to websockets we get Cache error
 void HanddleTelemetryMessage(UDPPkt pkt){
   telemetryPkt = pkt;
+  isSubmarineOnline = true;
+  lastSubmarineTelemetry = millis();
 }
 
 //Message callback to send by websocket
@@ -79,10 +83,17 @@ void setup() {
 void loop() {
   static unsigned long lastMem = 0;
   static bool isDebugFrame = false;
+
+  if (millis() - lastSubmarineTelemetry >= 6000) {
+    lastSubmarineTelemetry = millis();
+    isSubmarineOnline = false;
+  }
+
   if (millis() - lastMem >= 2000) {
     isDebugFrame = true;
-
     lastMem = millis();
+
+    UDPSenderHarthbeat();
 
     Serial.printf(
       "Heap=%u | PSRAM=%u | MinHeap=%u | MinPSRAM=%u\n | temp=%.1f °C\n",
@@ -92,11 +103,15 @@ void loop() {
       ESP.getMinFreePsram(),
       temperatureRead()
     );
-
-    //send Submarine Telemetry
-    WebSocketBroadcastPack(telemetryPkt);
-    telemetryPkt.len = 0;
-
+    
+    if (isSubmarineOnline) {
+      //send Submarine Telemetry
+      WebSocketBroadcastPack(telemetryPkt);
+      telemetryPkt.len = 0;
+    } else {
+      WebSocketBroadcastTelemetry("#Submarine: Offline");
+    }
+    
     //send Float Telemetry
     String telemetry = "#Float: ";
     telemetry += String(temperatureRead());

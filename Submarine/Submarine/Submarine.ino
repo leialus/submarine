@@ -1,6 +1,7 @@
 //ESP32-S3 CAM
 
 #include <WiFi.h>
+#include "GlobalVars.h"
 #include "ComProtocols.h"
 #include "sensor.h"
 #include "CameraStream.h"
@@ -8,6 +9,8 @@
 
 ActionProt currentActionProt(0, false);
 volatile bool newAction = false; 
+
+static unsigned long lastHearthbeatDettected = 0;
 
 void onEvent(arduino_event_id_t event) {
   Serial.print("Evento Ethernet: ");
@@ -18,6 +21,11 @@ void onEvent(arduino_event_id_t event) {
 void HanddlerCommands(const ActionProt& prot){
   currentActionProt = prot;
   newAction = true;
+}
+
+void HanddlerHarthbeats() {
+  isConnectedToFloat = true;
+  lastHearthbeatDettected = millis();
 }
 
 void setup() {
@@ -38,7 +46,7 @@ void setup() {
 
   //UDP connection
   UDPInit();
-  MyUDPConnectionCallbacks(HanddlerCommands);
+  MyUDPConnectionCallbacks(HanddlerCommands, HanddlerHarthbeats);
 
   //create async task to send frames slices
   xTaskCreatePinnedToCore(FrameSplit, "FrameSplit", 8192, NULL, 3, NULL, 1);
@@ -51,27 +59,35 @@ void ToSendFrameSlice(const FrameProt& prot, const uint8_t* data, size_t data_le
 
 void loop() {
   static unsigned long lastMem = 0;
+
+  if (millis() - lastHearthbeatDettected >= 6000) {
+    isConnectedToFloat = false;
+  }
+  
   if (millis() - lastMem >= 2000) {
     lastMem = millis();
 
+    Serial.printf("isConnectedToFloat: %s\n", isConnectedToFloat ? "true" : "false");
+
+    boardHeat = temperatureRead();
     Serial.printf(
       "Heap=%u | PSRAM=%u | MinHeap=%u | MinPSRAM=%u\n | temp=%.1f °C\n",
       ESP.getFreeHeap(),
       ESP.getFreePsram(),
       ESP.getMinFreeHeap(),
       ESP.getMinFreePsram(),
-      temperatureRead()
+      boardHeat
     );
 
     String telemetry = "#Submarine: ";
-    telemetry += String(temperatureRead());
+    telemetry += String(boardHeat);
     
     UDPSenderTelemetry(telemetry);
   }
 
   UDPReceiver(); 
   
-  if (newAction) {
+  if (newAction && isConnectedToFloat) {
     //DO SOMETHING
   } 
 
