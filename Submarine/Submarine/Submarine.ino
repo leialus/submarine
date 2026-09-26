@@ -62,6 +62,7 @@ void loop() {
 
   if (millis() - lastHearthbeatDettected >= 6000) {
     isConnectedToFloat = false;
+    //DO SOMETHING
   }
   
   if (millis() - lastMem >= 2000) {
