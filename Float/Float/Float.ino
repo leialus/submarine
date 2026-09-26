@@ -82,6 +82,7 @@ void setup() {
 
 void loop() {
   static unsigned long lastMem = 0;
+  static unsigned long lastHarthbeat = 0;
   static bool isDebugFrame = false;
 
   if (millis() - lastSubmarineTelemetry >= 6000) {
@@ -89,11 +90,13 @@ void loop() {
     isSubmarineOnline = false;
   }
 
+  if (millis() - lastHarthbeat >= 2000) {
+    UDPSenderHarthbeat();
+  }
+
   if (millis() - lastMem >= 2000) {
     isDebugFrame = true;
     lastMem = millis();
-
-    UDPSenderHarthbeat();
 
     Serial.printf(
       "Heap=%u | PSRAM=%u | MinHeap=%u | MinPSRAM=%u\n | temp=%.1f °C\n",
